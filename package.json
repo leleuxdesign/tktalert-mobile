@@ -8,22 +8,15 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "build:ios": "eas build --platform ios --profile production",
-    "build:android": "eas build --platform android --profile production",
-    "build:preview": "eas build --platform all --profile preview",
-    "submit:ios": "eas submit --platform ios",
-    "submit:android": "eas submit --platform android"
+    "build:ios": "npx eas build --platform ios --profile production",
+    "build:android": "npx eas build --platform android --profile production",
+    "build:preview": "npx eas build --platform all --profile preview",
+    "submit:ios": "npx eas submit --platform ios",
+    "submit:android": "npx eas submit --platform android"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "^11.16.0",
-      "onFail": "download"
-    }
-  },
   "type": "module",
   "dependencies": {
     "@expo/vector-icons": "^15.1.1",

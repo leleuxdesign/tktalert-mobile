@@ -36,10 +36,10 @@ assets/                — App icon, splash, adaptive icon
 
 ```bash
 # Install dependencies
-pnpm install
+npm install
 
 # Start Expo dev server
-pnpm start
+npm start
 
 # Then press:
 #   i — open iOS Simulator
@@ -60,13 +60,13 @@ pnpm start
 ### Step 1 — Log in to EAS
 
 ```bash
-pnpm exec eas login
+npx eas login
 ```
 
 ### Step 2 — Initialize the EAS project
 
 ```bash
-pnpm exec eas init
+npx eas init
 ```
 
 This creates a project on expo.dev and adds `extra.eas.projectId` to `app.json`.
@@ -91,13 +91,13 @@ Edit `eas.json` and fill in your Apple credentials:
 
 ```bash
 # iOS production build (requires Apple Developer account)
-pnpm run build:ios
+npm run build:ios
 
 # Android production build
-pnpm run build:android
+npm run build:android
 
 # Both platforms (internal preview APK — no store accounts needed)
-pnpm run build:preview
+npm run build:preview
 ```
 
 EAS Build runs in the cloud — you don't need Xcode or Android Studio locally.
@@ -106,10 +106,10 @@ EAS Build runs in the cloud — you don't need Xcode or Android Studio locally.
 
 ```bash
 # Submit to App Store (requires Apple Developer account)
-pnpm run submit:ios
+npm run submit:ios
 
 # Submit to Google Play
-pnpm run submit:android
+npm run submit:android
 ```
 
 ---
