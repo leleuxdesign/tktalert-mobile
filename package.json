@@ -1,0 +1,60 @@
+{
+  "name": "tktalert-mobile",
+  "version": "1.0.0",
+  "description": "",
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "build:ios": "eas build --platform ios --profile production",
+    "build:android": "eas build --platform android --profile production",
+    "build:preview": "eas build --platform all --profile preview",
+    "submit:ios": "eas submit --platform ios",
+    "submit:android": "eas submit --platform android"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^11.16.0",
+      "onFail": "download"
+    }
+  },
+  "type": "module",
+  "dependencies": {
+    "@expo/vector-icons": "^15.1.1",
+    "@react-native-async-storage/async-storage": "^3.1.1",
+    "@tanstack/react-query": "^5.101.4",
+    "@trpc/client": "^11.18.0",
+    "@trpc/react-query": "^11.18.0",
+    "expo": "~53.0.27",
+    "expo-constants": "^57.0.8",
+    "expo-device": "^57.0.1",
+    "expo-font": "^57.0.1",
+    "expo-notifications": "^57.0.8",
+    "expo-router": "^57.0.9",
+    "expo-secure-store": "^57.0.1",
+    "expo-splash-screen": "^57.0.5",
+    "expo-status-bar": "^57.0.1",
+    "nativewind": "^4.2.6",
+    "react": "^19.2.8",
+    "react-native": "^0.86.2",
+    "react-native-gesture-handler": "^3.1.0",
+    "react-native-reanimated": "^4.5.3",
+    "react-native-safe-area-context": "^5.8.1",
+    "react-native-screens": "^4.26.2",
+    "superjson": "^2.2.6",
+    "tailwindcss": "^4.3.3"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "@types/react-native": "^0.73.0",
+    "babel-plugin-module-resolver": "^5.0.3",
+    "eas-cli": "^21.5.0",
+    "typescript": "^7.0.2"
+  }
+}
