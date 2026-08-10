@@ -1,12 +1,12 @@
 import "../global.css";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StatusBar } from "expo-status-bar";
 import { View, ActivityIndicator } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { trpc, createTRPCClient } from "@/lib/trpc";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { colors } from "@/lib/ios6-theme";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -20,21 +20,16 @@ const queryClient = new QueryClient({
 const trpcClient = createTRPCClient();
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
-  const [isReady, setIsReady] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const router = useRouter();
   const segments = useSegments();
+  // The backend authenticates via an HttpOnly session cookie, which isn't
+  // readable from JS — ask the server whether the current cookie is valid.
+  const meQuery = trpc.auth.me.useQuery(undefined, { retry: false });
 
   useEffect(() => {
-    AsyncStorage.getItem("auth_token").then((token) => {
-      setIsAuthenticated(!!token);
-      setIsReady(true);
-    });
-  }, []);
+    if (meQuery.isLoading) return;
 
-  useEffect(() => {
-    if (!isReady) return;
-
+    const isAuthenticated = !!meQuery.data;
     const inAuthGroup = segments[0] === "auth";
 
     if (!isAuthenticated && !inAuthGroup) {
@@ -42,12 +37,12 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     } else if (isAuthenticated && inAuthGroup) {
       router.replace("/tabs/dashboard");
     }
-  }, [isReady, isAuthenticated, segments]);
+  }, [meQuery.isLoading, meQuery.data, segments]);
 
-  if (!isReady) {
+  if (meQuery.isLoading) {
     return (
-      <View className="flex-1 items-center justify-center bg-background">
-        <ActivityIndicator color="#22c55e" size="large" />
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background }}>
+        <ActivityIndicator color={colors.blue} size="large" />
       </View>
     );
   }
@@ -65,7 +60,7 @@ export default function RootLayout() {
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
-        <StatusBar style="light" />
+        <StatusBar style="dark" />
         <PushNotificationSetup />
         <AuthGuard>
           <Stack screenOptions={{ headerShown: false }}>

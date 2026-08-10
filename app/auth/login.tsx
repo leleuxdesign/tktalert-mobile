@@ -1,143 +1,125 @@
 import { useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-  ActivityIndicator,
-} from "react-native";
+import { View, Text, KeyboardAvoidingView, Platform, ScrollView, StyleSheet } from "react-native";
 import { Link, useRouter } from "expo-router";
+import { Bell } from "lucide-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { trpc } from "@/lib/trpc";
+import { colors, gradients, fontFamily } from "@/lib/ios6-theme";
+import {
+  IosPage,
+  IosAppIcon,
+  IosFormCard,
+  IosFormRow,
+  IosInput,
+  IosButton,
+  IosErrorBanner,
+} from "@/components/ios6";
 
 export default function LoginScreen() {
   const router = useRouter();
+  const utils = trpc.useUtils();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
 
   const loginMutation = trpc.auth.login.useMutation({
     onSuccess: async (data: any) => {
-      if (data?.token && data?.user) {
-        await Promise.all([
-          AsyncStorage.setItem("auth_token", data.token),
-          AsyncStorage.setItem("auth_user", JSON.stringify(data.user)),
-        ]);
+      if (data?.success && data?.user) {
+        await AsyncStorage.setItem("auth_user", JSON.stringify(data.user));
+        await utils.auth.me.invalidate();
         router.replace("/tabs/dashboard");
       }
     },
-    onError: (err: any) => {
-      Alert.alert("Sign In Failed", err.message || "Invalid email or password.");
-    },
+    onError: (err: any) => setError(err.message || "Invalid email or password."),
   });
 
   const handleLogin = () => {
+    setError("");
     if (!email.trim() || !password) {
-      Alert.alert("Missing Fields", "Please enter your email and password.");
+      setError("Please enter your email and password.");
       return;
     }
     loginMutation.mutate({ email: email.trim().toLowerCase(), password });
   };
 
   return (
-    <KeyboardAvoidingView
-      className="flex-1 bg-background"
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-      <ScrollView
-        contentContainerStyle={{ flexGrow: 1 }}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View className="flex-1 px-6 pt-20 pb-10">
-          {/* Logo / Header */}
-          <View className="items-center mb-12">
-            <View className="w-16 h-16 rounded-2xl bg-primary items-center justify-center mb-4">
-              <Text style={{ fontSize: 32 }}>🔔</Text>
-            </View>
-            <Text className="text-foreground text-3xl font-bold tracking-tight">
-              TKTAlert
-            </Text>
-            <Text className="text-muted text-sm mt-1">
-              Parking Ticket Alerts — Milwaukee
-            </Text>
+    <IosPage>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingTop: 40, paddingBottom: 40 }}>
+          <View style={styles.header}>
+            <IosAppIcon gradient={gradients.appIconBlue}>
+              <Bell size={40} color="#fff" strokeWidth={2} />
+            </IosAppIcon>
+            <Text style={styles.title}>TKTAlert</Text>
+            <Text style={styles.subtitle}>Sign in to your account</Text>
           </View>
 
-          {/* Form */}
-          <View className="gap-4">
-            <View>
-              <Text className="text-muted text-xs uppercase tracking-widest mb-2">
-                Email
-              </Text>
-              <TextInput
-                className="bg-surface border border-border rounded-xl px-4 py-4 text-foreground text-base"
-                placeholder="you@example.com"
-                placeholderTextColor="#8a9bb0"
+          <IosFormCard style={{ marginBottom: 16 }}>
+            <IosFormRow>
+              <IosInput
+                placeholder="Email"
                 value={email}
                 onChangeText={setEmail}
                 autoCapitalize="none"
+                autoCorrect={false}
                 keyboardType="email-address"
-                autoComplete="email"
-                returnKeyType="next"
+                style={styles.bareInput}
               />
-            </View>
-
-            <View>
-              <Text className="text-muted text-xs uppercase tracking-widest mb-2">
-                Password
-              </Text>
-              <TextInput
-                className="bg-surface border border-border rounded-xl px-4 py-4 text-foreground text-base"
-                placeholder="••••••••"
-                placeholderTextColor="#8a9bb0"
+            </IosFormRow>
+            <IosFormRow last>
+              <IosInput
+                placeholder="Password"
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
-                returnKeyType="done"
-                onSubmitEditing={handleLogin}
+                style={styles.bareInput}
               />
-            </View>
+            </IosFormRow>
+          </IosFormCard>
 
-            <Pressable
-              onPress={handleLogin}
-              disabled={loginMutation.isPending}
-              style={({ pressed }) => ({
-                transform: [{ scale: pressed ? 0.97 : 1 }],
-                opacity: loginMutation.isPending ? 0.7 : 1,
-              })}
-              className="bg-primary rounded-xl py-4 items-center mt-2"
-            >
-              {loginMutation.isPending ? (
-                <ActivityIndicator color="#0d1b2a" />
-              ) : (
-                <Text className="text-background font-bold text-base">
-                  Sign In
-                </Text>
-              )}
-            </Pressable>
+          {error ? <IosErrorBanner>{error}</IosErrorBanner> : null}
 
-            <Link href="/auth/forgot-password" asChild>
-              <Pressable className="items-center py-2">
-                <Text className="text-muted text-sm">Forgot password?</Text>
-              </Pressable>
+          <View style={{ paddingHorizontal: 16, marginBottom: 8 }}>
+            <IosButton variant="blue" onPress={handleLogin} loading={loginMutation.isPending}>
+              Sign In →
+            </IosButton>
+          </View>
+
+          <Link href="/auth/forgot-password" asChild>
+            <Text style={styles.link}>Forgot Password?</Text>
+          </Link>
+
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>NEW TO TKTALERT?</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <View style={{ paddingHorizontal: 16 }}>
+            <Link href="/auth/signup" asChild>
+              <IosButton variant="silver">Create Account</IosButton>
             </Link>
           </View>
-
-          {/* Footer */}
-          <View className="mt-auto pt-8 items-center">
-            <Text className="text-muted text-sm">
-              Don't have an account?{" "}
-              <Link href="/auth/signup">
-                <Text className="text-primary font-semibold">
-                  Start free trial
-                </Text>
-              </Link>
-            </Text>
-          </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </IosPage>
   );
 }
+
+const styles = StyleSheet.create({
+  header: { alignItems: "center", marginBottom: 32 },
+  title: { fontSize: 24, fontWeight: "700", color: colors.text, marginTop: 14, letterSpacing: -0.4, fontFamily },
+  subtitle: { fontSize: 14, color: colors.textLight, marginTop: 4, fontFamily },
+  bareInput: {
+    backgroundColor: "transparent",
+    borderWidth: 0,
+    borderRadius: 0,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    height: undefined,
+  },
+  link: { color: colors.blue, fontSize: 15, textAlign: "center", paddingVertical: 8, fontFamily },
+  divider: { flexDirection: "row", alignItems: "center", marginHorizontal: 16, marginVertical: 16, gap: 12 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: colors.separator },
+  dividerText: { fontSize: 12, color: colors.textLight, fontWeight: "700", letterSpacing: 0.5, fontFamily },
+});

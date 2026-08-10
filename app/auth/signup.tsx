@@ -2,167 +2,367 @@ import { useState } from "react";
 import {
   View,
   Text,
-  TextInput,
-  Pressable,
-  ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Alert,
-  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Pressable,
 } from "react-native";
 import { Link, useRouter } from "expo-router";
+import { MapPin, ChevronRight, Check } from "lucide-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { trpc } from "@/lib/trpc";
+import { colors, gradients, fontFamily } from "@/lib/ios6-theme";
+import {
+  IosPage,
+  IosNavBar,
+  IosStepDots,
+  IosErrorBanner,
+  IosFormCard,
+  IosFormRow,
+  IosInput,
+  IosButton,
+  IosTable,
+  IosTableRow,
+  IosTableRowLabel,
+  IosIconCell,
+  IosCard,
+  IosAppIcon,
+} from "@/components/ios6";
+
+const DISCLAIMER =
+  "TKTAlert monitors parking complaints filed with the City of Milwaukee — not parking enforcement activity. A notification means a complaint has been filed near your registered zone. It does not mean a parking ticket has been issued, is being issued, or will be issued. TKTAlert makes no guarantee that a complaint will result in enforcement action, nor that all complaints filed in your zone will be captured. Use of this service does not constitute legal advice. TKTAlert is not affiliated with the City of Milwaukee or any municipal authority.";
+
+type Step = 1 | 2 | 3 | 4 | 5 | "success";
+const STEP_TITLES: Record<number, string> = {
+  1: "Select City",
+  2: "Your Account",
+  3: "Your Address",
+  4: "Confirm Zone",
+  5: "Consent",
+};
 
 export default function SignupScreen() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [phone, setPhone] = useState("");
-
-  const registerMutation = trpc.auth.register.useMutation({
-    onSuccess: async (data: any) => {
-      if (data?.token && data?.user) {
-        await Promise.all([
-          AsyncStorage.setItem("auth_token", data.token),
-          AsyncStorage.setItem("auth_user", JSON.stringify(data.user)),
-        ]);
-        // Go to address setup after signup
-        router.replace("/tabs/dashboard");
-      }
-    },
-    onError: (err: any) => {
-      Alert.alert(
-        "Sign Up Failed",
-        err.message || "Could not create account. Please try again."
-      );
-    },
+  const utils = trpc.useUtils();
+  const [step, setStep] = useState<Step>(1);
+  const [error, setError] = useState("");
+  const [form, setForm] = useState({
+    city: "Milwaukee",
+    email: "",
+    password: "",
+    phone: "",
+    street: "",
+    centerAddress: "",
+    label: "",
+    consentChecked: false,
+    consentTimestamp: "",
   });
 
-  const handleSignup = () => {
-    if (!email.trim() || !password) {
-      Alert.alert("Missing Fields", "Email and password are required.");
-      return;
-    }
-    if (password.length < 8) {
-      Alert.alert("Weak Password", "Password must be at least 8 characters.");
-      return;
-    }
-    registerMutation.mutate({
-      email: email.trim().toLowerCase(),
-      password,
-      phone: phone.trim() || undefined,
-    });
+  const registerMutation = trpc.auth.register.useMutation();
+  const updateProfile = trpc.auth.updateProfile.useMutation();
+  const recordConsent = trpc.auth.recordConsent.useMutation();
+  const createZone = trpc.zones.create.useMutation();
+
+  const updateForm = (field: keyof typeof form, value: string | boolean) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+    setError("");
   };
 
-  return (
-    <KeyboardAvoidingView
-      className="flex-1 bg-background"
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-      <ScrollView
-        contentContainerStyle={{ flexGrow: 1 }}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View className="flex-1 px-6 pt-16 pb-10">
-          {/* Header */}
-          <View className="mb-10">
-            <Text className="text-foreground text-3xl font-bold">
-              Start your free trial
+  const handleNext = async () => {
+    setError("");
+    try {
+      if (step === 1) {
+        if (!form.city.trim()) return setError("Please select a city.");
+        setStep(2);
+      } else if (step === 2) {
+        if (!form.email.trim()) return setError("Email is required.");
+        if (!form.password || form.password.length < 8)
+          return setError("Password must be at least 8 characters.");
+        const data: any = await registerMutation.mutateAsync({
+          email: form.email.trim().toLowerCase(),
+          password: form.password,
+        });
+        if (data?.user) await AsyncStorage.setItem("auth_user", JSON.stringify(data.user));
+        await utils.auth.me.invalidate();
+        if (form.phone.trim()) await updateProfile.mutateAsync({ phone: form.phone.trim() });
+        setStep(3);
+      } else if (step === 3) {
+        if (!form.street.trim()) return setError("Street name is required.");
+        if (!form.centerAddress || isNaN(Number(form.centerAddress)))
+          return setError("Enter a valid house number.");
+        setStep(4);
+      } else if (step === 4) {
+        setStep(5);
+      } else if (step === 5) {
+        if (!form.consentChecked) return setError("You must accept the disclaimer to continue.");
+        await recordConsent.mutateAsync();
+        await createZone.mutateAsync({
+          street: form.street,
+          centerAddress: Number(form.centerAddress),
+          label: form.label || undefined,
+        });
+        setStep("success");
+      }
+    } catch (err: any) {
+      setError(err?.message ?? "Something went wrong. Please try again.");
+    }
+  };
+
+  const currentStepNum = step === "success" ? 5 : step;
+
+  if (step === "success") {
+    return (
+      <IosPage>
+        <IosNavBar title="Account Created" />
+        <View style={styles.successWrap}>
+          <IosAppIcon size={80} gradient={gradients.appIconGreen}>
+            <Check size={40} color="#fff" strokeWidth={3} />
+          </IosAppIcon>
+          <Text style={styles.successTitle}>You're all set!</Text>
+          <Text style={styles.successBody}>
+            Your watch zone has been created. You'll receive SMS and email alerts whenever a
+            complaint is filed near{" "}
+            <Text style={{ color: colors.text, fontWeight: "700" }}>
+              {form.centerAddress} {form.street}
             </Text>
-            <Text className="text-muted text-sm mt-2">
-              7 days free, then $4.50/month. Cancel anytime.
-            </Text>
-          </View>
-
-          {/* Form */}
-          <View className="gap-4">
-            <View>
-              <Text className="text-muted text-xs uppercase tracking-widest mb-2">
-                Email
-              </Text>
-              <TextInput
-                className="bg-surface border border-border rounded-xl px-4 py-4 text-foreground text-base"
-                placeholder="you@example.com"
-                placeholderTextColor="#8a9bb0"
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                autoComplete="email"
-                returnKeyType="next"
-              />
-            </View>
-
-            <View>
-              <Text className="text-muted text-xs uppercase tracking-widest mb-2">
-                Password
-              </Text>
-              <TextInput
-                className="bg-surface border border-border rounded-xl px-4 py-4 text-foreground text-base"
-                placeholder="Min. 8 characters"
-                placeholderTextColor="#8a9bb0"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                returnKeyType="next"
-              />
-            </View>
-
-            <View>
-              <Text className="text-muted text-xs uppercase tracking-widest mb-2">
-                Phone{" "}
-                <Text className="text-muted normal-case text-xs">(optional — for SMS alerts)</Text>
-              </Text>
-              <TextInput
-                className="bg-surface border border-border rounded-xl px-4 py-4 text-foreground text-base"
-                placeholder="+1 (414) 555-0100"
-                placeholderTextColor="#8a9bb0"
-                value={phone}
-                onChangeText={setPhone}
-                keyboardType="phone-pad"
-                returnKeyType="done"
-                onSubmitEditing={handleSignup}
-              />
-            </View>
-
-            <Pressable
-              onPress={handleSignup}
-              disabled={registerMutation.isPending}
-              style={({ pressed }) => ({
-                transform: [{ scale: pressed ? 0.97 : 1 }],
-                opacity: registerMutation.isPending ? 0.7 : 1,
-              })}
-              className="bg-primary rounded-xl py-4 items-center mt-2"
-            >
-              {registerMutation.isPending ? (
-                <ActivityIndicator color="#0d1b2a" />
-              ) : (
-                <Text className="text-background font-bold text-base">
-                  Create Account
-                </Text>
-              )}
-            </Pressable>
-
-            {/* Legal disclaimer */}
-            <Text className="text-muted text-xs text-center leading-5 mt-2">
-              TKTAlert monitors public city data. Alerts are informational only
-              and do not guarantee ticket prevention. By signing up you agree to
-              our Terms of Service.
-            </Text>
-          </View>
-
-          {/* Footer */}
-          <View className="mt-auto pt-8 items-center">
-            <Text className="text-muted text-sm">
-              Already have an account?{" "}
-              <Link href="/auth/login">
-                <Text className="text-primary font-semibold">Sign in</Text>
-              </Link>
-            </Text>
+            .
+          </Text>
+          <View style={{ paddingHorizontal: 16, width: "100%" }}>
+            <IosButton variant="blue" onPress={() => router.replace("/tabs/dashboard")}>
+              Go to Dashboard →
+            </IosButton>
           </View>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </IosPage>
+    );
+  }
+
+  const isBusy = registerMutation.isPending || updateProfile.isPending || recordConsent.isPending || createZone.isPending;
+
+  return (
+    <IosPage>
+      <IosNavBar
+        title={STEP_TITLES[currentStepNum]}
+        onBack={currentStepNum > 1 ? () => setStep((currentStepNum - 1) as Step) : () => router.back()}
+        backLabel={currentStepNum > 1 ? "Back" : "Back"}
+      />
+      <IosStepDots total={5} current={currentStepNum} />
+
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 32 }}>
+          {error ? <IosErrorBanner>{error}</IosErrorBanner> : null}
+
+          {step === 1 && (
+            <View>
+              <View style={styles.stepHeader}>
+                <Text style={styles.stepTitle}>Select Your City</Text>
+                <Text style={styles.stepSubtitle}>TKTAlert currently covers Milwaukee, WI.</Text>
+              </View>
+              <IosTable style={{ marginHorizontal: 16 }}>
+                <IosTableRow onPress={() => updateForm("city", "Milwaukee")} last>
+                  <IosIconCell gradient={gradients.iconBlue}>
+                    <MapPin size={16} color="#fff" />
+                  </IosIconCell>
+                  <IosTableRowLabel>Milwaukee, WI</IosTableRowLabel>
+                  {form.city === "Milwaukee" && <Text style={styles.checkmark}>✓</Text>}
+                </IosTableRow>
+              </IosTable>
+              <View style={styles.stepFooter}>
+                <IosButton variant="blue" onPress={handleNext}>
+                  Continue →
+                </IosButton>
+              </View>
+            </View>
+          )}
+
+          {step === 2 && (
+            <View>
+              <View style={styles.stepHeader}>
+                <Text style={styles.stepTitle}>Your Account</Text>
+                <Text style={styles.stepSubtitle}>Create your account to continue.</Text>
+              </View>
+              <IosFormCard>
+                <IosFormRow>
+                  <IosInput
+                    placeholder="Email"
+                    value={form.email}
+                    onChangeText={(v) => updateForm("email", v)}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="email-address"
+                    style={styles.bareInput}
+                  />
+                </IosFormRow>
+                <IosFormRow>
+                  <IosInput
+                    placeholder="Password (min 8 chars)"
+                    value={form.password}
+                    onChangeText={(v) => updateForm("password", v)}
+                    secureTextEntry
+                    style={styles.bareInput}
+                  />
+                </IosFormRow>
+                <IosFormRow last>
+                  <IosInput
+                    placeholder="Phone number (optional — for SMS alerts)"
+                    value={form.phone}
+                    onChangeText={(v) => updateForm("phone", v)}
+                    keyboardType="phone-pad"
+                    style={styles.bareInput}
+                  />
+                </IosFormRow>
+              </IosFormCard>
+              <View style={styles.stepFooter}>
+                <IosButton variant="blue" onPress={handleNext} loading={isBusy}>
+                  Continue →
+                </IosButton>
+              </View>
+            </View>
+          )}
+
+          {step === 3 && (
+            <View>
+              <View style={styles.stepHeader}>
+                <Text style={styles.stepTitle}>Your Address</Text>
+                <Text style={styles.stepSubtitle}>Enter the address you want to monitor.</Text>
+              </View>
+              <IosFormCard>
+                <IosFormRow>
+                  <FormLabelInput label="Street" placeholder="e.g. N Water St" value={form.street} onChangeText={(v) => updateForm("street", v)} />
+                </IosFormRow>
+                <IosFormRow>
+                  <FormLabelInput label="House #" placeholder="e.g. 1234" value={form.centerAddress} onChangeText={(v) => updateForm("centerAddress", v)} keyboardType="number-pad" />
+                </IosFormRow>
+                <IosFormRow last>
+                  <FormLabelInput label="Label" placeholder="Optional — e.g. Home" value={form.label} onChangeText={(v) => updateForm("label", v)} />
+                </IosFormRow>
+              </IosFormCard>
+              <View style={styles.stepFooter}>
+                <IosButton variant="blue" onPress={handleNext}>
+                  Continue →
+                </IosButton>
+              </View>
+            </View>
+          )}
+
+          {step === 4 && (
+            <View>
+              <View style={styles.stepHeader}>
+                <Text style={styles.stepTitle}>Confirm Zone</Text>
+                <Text style={styles.stepSubtitle}>We apply a ±100 address range automatically.</Text>
+              </View>
+              <IosTable style={{ marginHorizontal: 16 }}>
+                {[
+                  { label: "Street", value: form.street },
+                  { label: "Center", value: form.centerAddress },
+                  { label: "Range Min", value: String(Math.max(0, Number(form.centerAddress) - 100)) },
+                  { label: "Range Max", value: String(Number(form.centerAddress) + 100) },
+                  ...(form.label ? [{ label: "Label", value: form.label }] : []),
+                ].map((row, i, arr) => (
+                  <IosTableRow key={row.label} last={i === arr.length - 1}>
+                    <IosTableRowLabel>{row.label}</IosTableRowLabel>
+                    <Text style={styles.rowValue}>{row.value}</Text>
+                  </IosTableRow>
+                ))}
+              </IosTable>
+              <View style={[styles.stepFooter, { flexDirection: "row", gap: 12 }]}>
+                <IosButton variant="silver" flex={1} onPress={() => setStep(3)}>
+                  ← Edit
+                </IosButton>
+                <IosButton variant="blue" flex={2} onPress={handleNext}>
+                  Looks Good →
+                </IosButton>
+              </View>
+            </View>
+          )}
+
+          {step === 5 && (
+            <View>
+              <View style={styles.stepHeader}>
+                <Text style={styles.stepTitle}>Review & Consent</Text>
+                <Text style={styles.stepSubtitle}>Please read and accept the disclaimer.</Text>
+              </View>
+              <IosCard style={{ marginHorizontal: 16, padding: 14, maxHeight: 180 }}>
+                <ScrollView>
+                  <Text style={styles.disclaimer}>{DISCLAIMER}</Text>
+                </ScrollView>
+              </IosCard>
+              <IosTable style={{ marginHorizontal: 16, marginTop: 16 }}>
+                <Pressable
+                  style={styles.consentRow}
+                  onPress={() => {
+                    const next = !form.consentChecked;
+                    updateForm("consentChecked", next);
+                    if (next) updateForm("consentTimestamp", new Date().toISOString());
+                  }}
+                >
+                  <View style={[styles.checkbox, form.consentChecked && styles.checkboxChecked]}>
+                    {form.consentChecked && <Check size={14} color="#fff" strokeWidth={3} />}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.consentText}>
+                      I have read and agree to the disclaimer above. I understand that TKTAlert
+                      monitors complaints, not enforcement activity.
+                    </Text>
+                    {form.consentTimestamp ? (
+                      <Text style={styles.consentTimestamp}>
+                        Acknowledged at {new Date(form.consentTimestamp).toLocaleString()}
+                      </Text>
+                    ) : null}
+                  </View>
+                </Pressable>
+              </IosTable>
+              <View style={styles.stepFooter}>
+                <IosButton variant="green" onPress={handleNext} loading={isBusy}>
+                  Complete Sign Up →
+                </IosButton>
+              </View>
+            </View>
+          )}
+
+          <Link href="/auth/login" asChild>
+            <Text style={styles.footerLink}>Already have an account? Sign In</Text>
+          </Link>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </IosPage>
   );
 }
+
+function FormLabelInput({
+  label,
+  ...props
+}: { label: string } & React.ComponentProps<typeof IosInput>) {
+  return (
+    <View style={{ minHeight: 44, paddingHorizontal: 12, flexDirection: "row", alignItems: "center" }}>
+      <Text style={styles.inlineLabel}>{label}</Text>
+      <IosInput {...props} style={[styles.bareInput, { paddingLeft: 0, flex: 1 }]} />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  stepHeader: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
+  stepTitle: { fontSize: 22, fontWeight: "700", color: colors.text, marginBottom: 4, fontFamily },
+  stepSubtitle: { fontSize: 14, color: colors.textLight, fontFamily },
+  stepFooter: { padding: 16, paddingTop: 20 },
+  bareInput: { backgroundColor: "transparent", borderWidth: 0, borderRadius: 0, paddingVertical: 13, paddingHorizontal: 16, height: undefined },
+  footerLink: { textAlign: "center", color: colors.blue, fontSize: 14, paddingHorizontal: 16, paddingBottom: 16, fontFamily },
+  checkmark: { color: colors.blue, fontSize: 20, fontWeight: "700" },
+  rowValue: { fontSize: 17, color: colors.textLight, fontFamily },
+  inlineLabel: { fontSize: 17, color: colors.text, minWidth: 90, fontFamily },
+  disclaimer: { fontSize: 12, color: colors.textLight, lineHeight: 18, fontFamily },
+  consentRow: { flexDirection: "row", alignItems: "flex-start", paddingHorizontal: 16, paddingVertical: 12, gap: 12 },
+  checkbox: {
+    width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+    backgroundColor: "#e0e0e5", borderWidth: 1, borderColor: colors.separator,
+    alignItems: "center", justifyContent: "center", marginTop: 1,
+  },
+  checkboxChecked: { backgroundColor: colors.green, borderColor: "#1d9933" },
+  consentText: { fontSize: 14, color: colors.text, lineHeight: 19, fontFamily },
+  consentTimestamp: { fontSize: 11, color: colors.textLight, marginTop: 4, fontFamily },
+  successWrap: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 20, gap: 8 },
+  successTitle: { fontSize: 24, fontWeight: "700", color: colors.text, marginTop: 16, fontFamily },
+  successBody: { fontSize: 15, color: colors.textLight, lineHeight: 21, textAlign: "center", marginBottom: 24, fontFamily },
+});
