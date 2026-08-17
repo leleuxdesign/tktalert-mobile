@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { View, Text, ScrollView, RefreshControl, ActivityIndicator, StyleSheet, Alert, Pressable } from "react-native";
+import { View, Text, ScrollView, RefreshControl, ActivityIndicator, StyleSheet, Pressable, Linking, Alert } from "react-native";
 import { useRouter, Link } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Bell, AlertCircle, ChevronRight, Car } from "lucide-react-native";
@@ -17,6 +17,7 @@ import {
   IosButton,
   IosCard,
   IosZoneTile,
+  IosDisclaimerModal,
 } from "@/components/ios6";
 
 interface User {
@@ -27,10 +28,29 @@ interface User {
   trialEndsAt?: string;
 }
 
+// Opens Stripe Checkout in the system browser (not in-app) — subscription
+// purchases happen outside the app, matching the external-checkout model.
+const STRIPE_MONTHLY_PRICE_ID = "price_1U0SChHWSdvcOfI5eiCx5rjf";
+
+function useCheckoutHandler() {
+  const createCheckout = trpc.stripe.createCheckoutSession.useMutation({
+    onError: (err: any) => Alert.alert("Error", err.message || "Could not start checkout."),
+  });
+
+  const openCheckout = async () => {
+    const result = await createCheckout.mutateAsync({ priceId: STRIPE_MONTHLY_PRICE_ID });
+    if (result?.url) Linking.openURL(result.url);
+  };
+
+  return { openCheckout, isPending: createCheckout.isPending };
+}
+
 export default function DashboardScreen() {
   const router = useRouter();
   const [cachedUser, setCachedUser] = useState<User | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [disclaimerVisible, setDisclaimerVisible] = useState(false);
+  const { openCheckout, isPending: checkoutPending } = useCheckoutHandler();
 
   useEffect(() => {
     AsyncStorage.getItem("auth_user").then((stored) => {
@@ -83,14 +103,6 @@ export default function DashboardScreen() {
   const statusLabel = isActiveStatus ? "Active" : "Inactive";
   const statusColor = isActiveStatus ? colors.green : colors.red;
 
-  const showDisclaimer = () => {
-    Alert.alert(
-      "Heads Up 🚗",
-      "TKTAlert monitors parking complaints filed with the city — it does not detect active parking enforcement patrols. " +
-        "A notification means a complaint was filed near your zone, not that a ticket has been issued or that enforcement is nearby right now."
-    );
-  };
-
   return (
     <IosPage>
       <IosNavBar title="TKTAlert" />
@@ -104,7 +116,13 @@ export default function DashboardScreen() {
               <Text style={styles.trialText}>
                 🕐 {trialDaysLeft} day{trialDaysLeft !== 1 ? "s" : ""} left in free trial
               </Text>
-              <Text style={styles.trialCta}>Subscribe →</Text>
+              <Pressable onPress={openCheckout} disabled={checkoutPending} hitSlop={6}>
+                {checkoutPending ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.trialCta}>Subscribe →</Text>
+                )}
+              </Pressable>
             </View>
           </View>
         )}
@@ -119,7 +137,7 @@ export default function DashboardScreen() {
           <IosCard style={styles.activityCard}>
             <View style={styles.activityHeaderRow}>
               <Text style={styles.activityTitle}>👀 TKTAlert is watching</Text>
-              <Pressable onPress={showDisclaimer} hitSlop={8} style={styles.disclaimerBtn}>
+              <Pressable onPress={() => setDisclaimerVisible(true)} hitSlop={8} style={styles.disclaimerBtn}>
                 <Car size={14} color={colors.textLight} />
               </Pressable>
             </View>
@@ -139,7 +157,7 @@ export default function DashboardScreen() {
                 <Text style={styles.activityLabel}>This Month</Text>
               </View>
             </View>
-            <Text style={styles.activityFootnote}>Complaints tracked in your watch zone city</Text>
+            <Text style={styles.activityFootnote}>Total complaints scanned by TKTAlert</Text>
           </IosCard>
         )}
 
@@ -209,12 +227,13 @@ export default function DashboardScreen() {
           </IosTable>
         </View>
       </ScrollView>
+      <IosDisclaimerModal visible={disclaimerVisible} onClose={() => setDisclaimerVisible(false)} />
     </IosPage>
   );
 }
 
 function RenewScreen() {
-  const createCheckout = trpc.stripe.createCheckoutSession.useMutation();
+  const { openCheckout, isPending: checkoutPending } = useCheckoutHandler();
   return (
     <IosPage style={styles.center}>
       <View style={{ alignItems: "center", paddingHorizontal: 20 }}>
@@ -228,7 +247,7 @@ function RenewScreen() {
       </View>
       <View style={{ width: "100%", paddingHorizontal: 16 }}>
         <IosCard style={{ padding: 0 }}>
-          <IosTableRow last>
+          <IosTableRow onPress={openCheckout} last>
             <IosIconCell gradient={gradients.iconBlue}>
               <Bell size={16} color="#fff" />
             </IosIconCell>
@@ -237,9 +256,10 @@ function RenewScreen() {
               <Text style={styles.rowSubtitle}>Billed monthly</Text>
             </View>
             <Text style={styles.planPrice}>$2.99/mo</Text>
+            <ChevronRight size={16} color={colors.silver} />
           </IosTableRow>
         </IosCard>
-        {createCheckout.isPending && <ActivityIndicator style={{ marginTop: 16 }} color={colors.blue} />}
+        {checkoutPending && <ActivityIndicator style={{ marginTop: 16 }} color={colors.blue} />}
       </View>
     </IosPage>
   );

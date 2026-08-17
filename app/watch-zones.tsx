@@ -16,6 +16,7 @@ import {
   IosButton,
   IosInput,
   IosServiceAreaPicker,
+  IosDisclaimerModal,
 } from "@/components/ios6";
 
 const emptyZoneDraft = {
@@ -30,6 +31,7 @@ export default function WatchZonesScreen() {
   const utils = trpc.useUtils();
   const [showAddZone, setShowAddZone] = useState(false);
   const [showMap, setShowMap] = useState(false);
+  const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [newZone, setNewZone] = useState(emptyZoneDraft);
 
   const zonesQuery = trpc.zones.list.useQuery();
@@ -39,6 +41,7 @@ export default function WatchZonesScreen() {
       utils.zones.list.invalidate();
       setShowAddZone(false);
       setNewZone(emptyZoneDraft);
+      setShowDisclaimer(true);
     },
     onError: (err: any) => Alert.alert("Error", err.message || "Could not add zone."),
   });
@@ -205,6 +208,7 @@ export default function WatchZonesScreen() {
       </ScrollView>
 
       <AddressMapPicker visible={showMap} onClose={() => setShowMap(false)} onConfirm={handleMapConfirm} />
+      <IosDisclaimerModal visible={showDisclaimer} onClose={() => setShowDisclaimer(false)} />
     </IosPage>
   );
 }

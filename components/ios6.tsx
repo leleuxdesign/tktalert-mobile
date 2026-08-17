@@ -492,6 +492,29 @@ export function IosErrorBanner({ children }: { children: React.ReactNode }) {
   );
 }
 
+// ── Disclaimer modal (patrol-detection notice) ────────────────────────────
+export const PATROL_DISCLAIMER_TEXT =
+  "TKTAlert monitors parking complaints filed with the city — it does not detect active parking enforcement patrols.";
+
+export function IosDisclaimerModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.disclaimerOverlay}>
+        <View style={styles.disclaimerBox}>
+          <LinearGradient colors={["#f5f5f7", "#e8e8ed"]} style={styles.disclaimerGradient}>
+            <Text style={styles.disclaimerTitle}>Heads Up 🚗</Text>
+            <Text style={styles.disclaimerMessage}>{PATROL_DISCLAIMER_TEXT}</Text>
+            <View style={styles.disclaimerDivider} />
+            <Pressable onPress={onClose} style={styles.disclaimerBtnWrap}>
+              <Text style={styles.disclaimerBtnText}>OK</Text>
+            </Pressable>
+          </LinearGradient>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 // ── Page wrapper ─────────────────────────────────────────────────────────
 export function IosPage({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
   return (
@@ -725,6 +748,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     ...btnShadow,
   },
+  disclaimerOverlay: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.5)" },
+  disclaimerBox: { width: 300, borderRadius: 12, borderWidth: 1, borderColor: "#9a9a9f", overflow: "hidden", ...btnShadow },
+  disclaimerGradient: {},
+  disclaimerTitle: { fontSize: 19, fontWeight: "700", textAlign: "center", color: colors.text, fontFamily, paddingTop: 18, paddingHorizontal: 18, paddingBottom: 6 },
+  disclaimerMessage: { fontSize: 16, lineHeight: 22, textAlign: "center", color: colors.text, fontFamily, paddingHorizontal: 18, paddingBottom: 18 },
+  disclaimerDivider: { height: 1, backgroundColor: colors.separator },
+  disclaimerBtnWrap: { height: 48, alignItems: "center", justifyContent: "center" },
+  disclaimerBtnText: { fontSize: 18, fontWeight: "700", color: colors.blue, fontFamily },
   shadowField: {
     backgroundColor: colors.white,
     borderRadius: 10,
