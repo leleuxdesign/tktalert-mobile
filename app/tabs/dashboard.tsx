@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { View, Text, ScrollView, RefreshControl, ActivityIndicator, StyleSheet, Pressable, Linking, Alert } from "react-native";
+import { View, Text, ScrollView, RefreshControl, ActivityIndicator, StyleSheet, Pressable } from "react-native";
 import { useRouter, Link } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Bell, AlertCircle, ChevronRight, Car } from "lucide-react-native";
@@ -28,29 +28,11 @@ interface User {
   trialEndsAt?: string;
 }
 
-// Opens Stripe Checkout in the system browser (not in-app) — subscription
-// purchases happen outside the app, matching the external-checkout model.
-const STRIPE_MONTHLY_PRICE_ID = "price_1U0SChHWSdvcOfI5eiCx5rjf";
-
-function useCheckoutHandler() {
-  const createCheckout = trpc.stripe.createCheckoutSession.useMutation({
-    onError: (err: any) => Alert.alert("Error", err.message || "Could not start checkout."),
-  });
-
-  const openCheckout = async () => {
-    const result = await createCheckout.mutateAsync({ priceId: STRIPE_MONTHLY_PRICE_ID });
-    if (result?.url) Linking.openURL(result.url);
-  };
-
-  return { openCheckout, isPending: createCheckout.isPending };
-}
-
 export default function DashboardScreen() {
   const router = useRouter();
   const [cachedUser, setCachedUser] = useState<User | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [disclaimerVisible, setDisclaimerVisible] = useState(false);
-  const { openCheckout, isPending: checkoutPending } = useCheckoutHandler();
 
   useEffect(() => {
     AsyncStorage.getItem("auth_user").then((stored) => {
@@ -116,13 +98,7 @@ export default function DashboardScreen() {
               <Text style={styles.trialText}>
                 🕐 {trialDaysLeft} day{trialDaysLeft !== 1 ? "s" : ""} left in free trial
               </Text>
-              <Pressable onPress={openCheckout} disabled={checkoutPending} hitSlop={6}>
-                {checkoutPending ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.trialCta}>Subscribe →</Text>
-                )}
-              </Pressable>
+              <Text style={styles.trialSubtext}>Subscribe at tktalert.net</Text>
             </View>
           </View>
         )}
@@ -233,7 +209,6 @@ export default function DashboardScreen() {
 }
 
 function RenewScreen() {
-  const { openCheckout, isPending: checkoutPending } = useCheckoutHandler();
   return (
     <IosPage style={styles.center}>
       <View style={{ alignItems: "center", paddingHorizontal: 20 }}>
@@ -244,22 +219,7 @@ function RenewScreen() {
         <Text style={styles.renewBody}>
           Renew to continue receiving parking complaint alerts for your watch zones.
         </Text>
-      </View>
-      <View style={{ width: "100%", paddingHorizontal: 16 }}>
-        <IosCard style={{ padding: 0 }}>
-          <IosTableRow onPress={openCheckout} last>
-            <IosIconCell gradient={gradients.iconBlue}>
-              <Bell size={16} color="#fff" />
-            </IosIconCell>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.rowTitle}>Monthly Plan</Text>
-              <Text style={styles.rowSubtitle}>Billed monthly</Text>
-            </View>
-            <Text style={styles.planPrice}>$2.99/mo</Text>
-            <ChevronRight size={16} color={colors.silver} />
-          </IosTableRow>
-        </IosCard>
-        {checkoutPending && <ActivityIndicator style={{ marginTop: 16 }} color={colors.blue} />}
+        <Text style={styles.renewLink}>Manage your subscription at tktalert.net</Text>
       </View>
     </IosPage>
   );
@@ -273,12 +233,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     backgroundColor: "#ffb400",
     borderRadius: 10,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
   },
   trialText: { fontSize: 14, fontWeight: "600", color: "#5a3800", fontFamily },
-  trialCta: { fontSize: 13, fontWeight: "700", color: "#fff", backgroundColor: "rgba(0,0,0,0.25)", borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, overflow: "hidden", fontFamily },
+  trialSubtext: { fontSize: 12, fontWeight: "600", color: "#5a3800", fontFamily, marginTop: 4 },
   statsRow: { flexDirection: "row", gap: 10, marginBottom: 16 },
   activityCard: { padding: 14, marginBottom: 20 },
   activityHeaderRow: { marginBottom: 10, position: "relative", justifyContent: "center" },
@@ -303,5 +260,5 @@ const styles = StyleSheet.create({
   renewIcon: { width: 72, height: 72, borderRadius: 16, backgroundColor: colors.red, alignItems: "center", justifyContent: "center", marginBottom: 16 },
   renewTitle: { fontSize: 22, fontWeight: "700", color: colors.text, marginBottom: 6, fontFamily },
   renewBody: { fontSize: 14, color: colors.textLight, textAlign: "center", marginBottom: 28, fontFamily },
-  planPrice: { fontSize: 16, fontWeight: "700", color: colors.blue, fontFamily },
+  renewLink: { fontSize: 14, fontWeight: "700", color: colors.blue, textAlign: "center", fontFamily },
 });
