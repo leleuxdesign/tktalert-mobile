@@ -22,8 +22,10 @@ const appRouter = t.router({
     login: t.procedure.input(passthrough).mutation((): any => ({})),
     logout: t.procedure.mutation((): any => ({})),
     forgotPassword: t.procedure.input(passthrough).mutation((): any => ({})),
+    resetPassword: t.procedure.input(passthrough).mutation((): any => ({})),
     updateProfile: t.procedure.input(passthrough).mutation((): any => ({})),
     changePassword: t.procedure.input(passthrough).mutation((): any => ({})),
+    savePushToken: t.procedure.input(passthrough).mutation((): any => ({})),
     recordConsent: t.procedure.mutation((): any => ({})),
   }),
   zones: t.router({
@@ -38,6 +40,31 @@ const appRouter = t.router({
   }),
   serviceArea: t.router({
     logInterest: t.procedure.input(passthrough).mutation((): any => ({})),
+  }),
+  adminUsers: t.router({
+    list: t.procedure.input(passthrough).query((): any[] => []),
+    get: t.procedure.input(passthrough).query((): any => ({})),
+    update: t.procedure.input(passthrough).mutation((): any => ({})),
+    getZones: t.procedure.input(passthrough).query((): any[] => []),
+    getAlerts: t.procedure.input(passthrough).query((): any[] => []),
+    create: t.procedure.input(passthrough).mutation((): any => ({})),
+    createZone: t.procedure.input(passthrough).mutation((): any => ({})),
+  }),
+  complaints: t.router({
+    adminList: t.procedure.input(passthrough).query((): any => ({ items: [], total: 0 })),
+  }),
+  adminStats: t.router({
+    overview: t.procedure.query((): any => ({})),
+  }),
+  adminAlerts: t.router({
+    list: t.procedure.input(passthrough).query((): any => ({ items: [], total: 0 })),
+  }),
+  adminScanLog: t.router({
+    list: t.procedure.input(passthrough).query((): any[] => []),
+  }),
+  scanner: t.router({
+    trigger: t.procedure.mutation((): any => ({})),
+    state: t.procedure.query((): any => ({})),
   }),
   stripe: t.router({
     createCheckoutSession: t.procedure.input(passthrough).mutation((): any => ({})),

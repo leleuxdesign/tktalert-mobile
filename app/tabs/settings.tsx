@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { CreditCard, MapPin, ChevronRight, Gift } from "lucide-react-native";
+import { CreditCard, MapPin, ChevronRight, Gift, Shield } from "lucide-react-native";
 import { trpc } from "@/lib/trpc";
 import { colors, gradients, fontFamily, cardShadow } from "@/lib/ios6-theme";
 import { formatPhoneDisplay } from "@/lib/format";
@@ -176,6 +176,31 @@ export default function SettingsScreen() {
             </View>
           </View>
         </View>
+
+        {/* Administration */}
+        {user.role === "admin" && (
+          <View style={{ marginBottom: 24 }}>
+            <IosSectionLabel>Administration</IosSectionLabel>
+            <Pressable onPress={() => router.push("/admin")}>
+              {({ pressed }) => (
+                <View style={[styles.wideCard, pressed && { opacity: 0.85 }]}>
+                  <View style={styles.wideCardIcon}>
+                    <IosIconCell gradient={[colors.purple, colors.purpleDark]}>
+                      <Shield size={18} color="#fff" />
+                    </IosIconCell>
+                  </View>
+                  <View style={styles.wideCardBody}>
+                    <Text style={styles.wideCardTitle}>Admin</Text>
+                    <Text style={styles.wideCardSubtitle}>Users, complaints, alerts & scan log</Text>
+                  </View>
+                  <View style={styles.wideCardTrailing}>
+                    <ChevronRight size={20} color={colors.silver} />
+                  </View>
+                </View>
+              )}
+            </Pressable>
+          </View>
+        )}
 
         {/* Account Actions */}
         <View>

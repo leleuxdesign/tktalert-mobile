@@ -14,7 +14,7 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Picker } from "@react-native-picker/picker";
-import { ChevronLeft, ChevronRight, Pencil, Check, X, MapPin } from "lucide-react-native";
+import { ChevronLeft, ChevronRight, ChevronDown, Pencil, Check, X, MapPin } from "lucide-react-native";
 import { colors, gradients, fontFamily, cardShadow, btnShadow, navShadow } from "@/lib/ios6-theme";
 import { SERVICE_AREAS, ServiceArea } from "@/lib/supported-locations";
 
@@ -112,11 +112,11 @@ export function IosButton({
 }
 
 // ── Inputs ───────────────────────────────────────────────────────────────
-export function IosInput(props: TextInputProps) {
+export function IosInput({ style, ...props }: TextInputProps) {
   return (
     <TextInput
       placeholderTextColor={colors.silver}
-      style={[styles.input, props.style]}
+      style={[styles.input, style]}
       {...props}
     />
   );
@@ -233,8 +233,16 @@ export function IosServiceAreaPicker({
           setOpen(true);
         }}
       >
-        <View pointerEvents="none">
-          <IosInput value={value?.label ?? ""} placeholder="Select service area" editable={false} />
+        <View pointerEvents="none" style={styles.serviceAreaWrap}>
+          <IosInput
+            value={value?.label ?? ""}
+            placeholder="Select service area"
+            editable={false}
+            style={styles.serviceAreaInput}
+          />
+          <View style={styles.serviceAreaChevron}>
+            <ChevronDown size={18} color={colors.textLight} />
+          </View>
         </View>
       </Pressable>
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
@@ -693,6 +701,9 @@ const styles = StyleSheet.create({
   },
   editPillText: { fontSize: 12, fontWeight: "700", color: colors.blue, fontFamily },
   lockedIconBtn: { padding: 6 },
+  serviceAreaWrap: { position: "relative", justifyContent: "center" },
+  serviceAreaInput: { paddingRight: 40 },
+  serviceAreaChevron: { position: "absolute", right: 14, top: 0, bottom: 0, justifyContent: "center" },
   pickerOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.4)" },
   pickerSheet: { backgroundColor: colors.white, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingBottom: 20 },
   pickerToolbar: {

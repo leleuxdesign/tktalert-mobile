@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Platform, Alert } from "react-native";
+import { useRouter } from "expo-router";
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
 import Constants from "expo-constants";
@@ -16,6 +17,7 @@ Notifications.setNotificationHandler({
 });
 
 export function usePushNotifications() {
+  const router = useRouter();
   const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
   const [notification, setNotification] =
     useState<Notifications.Notification | null>(null);
@@ -33,9 +35,8 @@ export function usePushNotifications() {
       });
 
     responseListener.current =
-      Notifications.addNotificationResponseReceivedListener((response) => {
-        // Handle notification tap — navigate to alert history
-        console.log("[Push] Notification tapped:", response);
+      Notifications.addNotificationResponseReceivedListener(() => {
+        router.push("/tabs/alerts");
       });
 
     return () => {

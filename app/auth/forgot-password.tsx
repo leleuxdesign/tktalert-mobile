@@ -2,6 +2,7 @@ import { useState } from "react";
 import { View, Text, KeyboardAvoidingView, Platform, ScrollView, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { Mail } from "lucide-react-native";
+import { trpc } from "@/lib/trpc";
 import { colors, gradients, fontFamily } from "@/lib/ios6-theme";
 import {
   IosPage,
@@ -19,14 +20,18 @@ export default function ForgotPasswordScreen() {
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
 
+  const forgotPassword = trpc.auth.forgotPassword.useMutation({
+    onSuccess: () => setSubmitted(true),
+    onError: () => setError("Something went wrong. Please try again."),
+  });
+
   const handleSubmit = () => {
     setError("");
     if (!email.trim()) {
       setError("Please enter your email address.");
       return;
     }
-    // TODO: wire to auth.requestPasswordReset once the backend implements it
-    setSubmitted(true);
+    forgotPassword.mutate({ email: email.trim() });
   };
 
   return (
@@ -72,8 +77,8 @@ export default function ForgotPasswordScreen() {
               {error ? <IosErrorBanner>{error}</IosErrorBanner> : null}
 
               <View style={{ paddingHorizontal: 16, gap: 12 }}>
-                <IosButton variant="blue" onPress={handleSubmit}>
-                  Send Reset Link →
+                <IosButton variant="blue" onPress={handleSubmit} disabled={forgotPassword.isPending}>
+                  {forgotPassword.isPending ? "Sending…" : "Send Reset Link →"}
                 </IosButton>
                 <IosButton variant="silver" onPress={() => router.back()}>
                   ← Back to Sign In

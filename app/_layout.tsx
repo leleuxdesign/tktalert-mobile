@@ -1,5 +1,5 @@
 import "../global.css";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StatusBar } from "expo-status-bar";
@@ -52,7 +52,17 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
 function PushNotificationSetup() {
   const { expoPushToken } = usePushNotifications();
-  // TODO: send expoPushToken to backend when user is authenticated
+  const meQuery = trpc.auth.me.useQuery(undefined, { retry: false });
+  const savePushToken = trpc.auth.savePushToken.useMutation();
+  const savedTokenRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!expoPushToken || !meQuery.data) return;
+    if (savedTokenRef.current === expoPushToken) return;
+    savedTokenRef.current = expoPushToken;
+    savePushToken.mutate({ expoPushToken });
+  }, [expoPushToken, meQuery.data]);
+
   return null;
 }
 
