@@ -1,6 +1,7 @@
 {
   "cli": {
-    "version": ">= 16.0.0"
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
@@ -12,11 +13,14 @@
     },
     "preview": {
       "distribution": "internal",
+      "channel": "preview",
       "android": {
         "buildType": "apk"
       }
     },
     "production": {
+      "channel": "production",
+      "autoIncrement": true,
       "ios": {
         "buildConfiguration": "Release"
       },
@@ -26,15 +30,18 @@
     }
   },
   "submit": {
-    "production": {
-      "ios": {
-        "appleId": "YOUR_APPLE_ID@email.com",
-        "ascAppId": "YOUR_APP_STORE_CONNECT_APP_ID",
-        "appleTeamId": "YOUR_APPLE_TEAM_ID"
-      },
+    "preview": {
       "android": {
-        "serviceAccountKeyPath": "./google-service-account.json",
-        "track": "production"
+        "serviceAccountKeyPath": "./credentials/google-play-service-account.json",
+        "track": "internal",
+        "releaseStatus": "draft"
+      }
+    },
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "./credentials/google-play-service-account.json",
+        "track": "production",
+        "releaseStatus": "draft"
       }
     }
   }
