@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc --noEmit)",
+      "Bash(npx expo --version)",
+      "Bash(npm view *)",
+      "Bash(npx expo-doctor)",
+      "Bash(xcrun simctl list *)",
+      "Bash(xcrun simctl listapps *)",
+      "mcp__claude-in-chrome__navigate",
+      "mcp__claude-in-chrome__tabs_context_mcp",
+      "mcp__claude-in-chrome__get_page_text",
+      "mcp__d26ce2ac-4dd8-4a30-8a0b-873be48375b4__stripe_api_read",
+      "mcp__1fa07b7e-5d04-4c05-b558-33c218c25af8__search_threads",
+      "mcp__claude-in-chrome__find",
+      "mcp__Claude_Browser__navigate",
+      "mcp__d26ce2ac-4dd8-4a30-8a0b-873be48375b4__get_stripe_account_info",
+      "mcp__claude-in-chrome__list_connected_browsers",
+      "mcp__claude-in-chrome__read_page",
+      "mcp__Claude_Browser__read_page",
+      "mcp__d26ce2ac-4dd8-4a30-8a0b-873be48375b4__search_stripe_documentation",
+      "mcp__Claude_Browser__read_network_requests",
+      "mcp__99ba9d6f-9b6b-4f28-886a-8418cd448a0f__search_files",
+      "mcp__1fa07b7e-5d04-4c05-b558-33c218c25af8__list_labels"
+    ]
+  }
+}
