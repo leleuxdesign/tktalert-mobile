@@ -7,6 +7,7 @@ import { colors, gradients, fontFamily } from "@/lib/ios6-theme";
 import { SERVICE_AREAS, ServiceArea } from "@/lib/supported-locations";
 import {
   IosPage,
+  IosKeyboardScroll,
   IosNavBar,
   IosAppIcon,
   IosCard,
@@ -52,7 +53,7 @@ export default function AdminNewUserScreen() {
     return (
       <IosPage>
         <IosNavBar title="User Created" />
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16, paddingTop: 32 }}>
+        <IosKeyboardScroll contentContainerStyle={{ paddingTop: 32 }}>
           <IosAppIcon size={64} gradient={gradients.appIconBlue}>
             <UserPlus size={30} color="#fff" strokeWidth={2} />
           </IosAppIcon>
@@ -76,7 +77,7 @@ export default function AdminNewUserScreen() {
               Done
             </IosButton>
           </View>
-        </ScrollView>
+        </IosKeyboardScroll>
       </IosPage>
     );
   }
@@ -84,7 +85,7 @@ export default function AdminNewUserScreen() {
   return (
     <IosPage>
       <IosNavBar title="Add User" onBack={() => router.back()} />
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingTop: 24, paddingBottom: 32 }}>
+      <IosKeyboardScroll contentContainerStyle={{ paddingTop: 24 }}>
         <View style={{ paddingHorizontal: 16, gap: 12 }}>
           <View>
             <Text style={styles.fieldLabel}>Email *</Text>
@@ -121,7 +122,7 @@ export default function AdminNewUserScreen() {
             New accounts are created as comped (free access) with no trial expiration.
           </Text>
         </View>
-      </ScrollView>
+      </IosKeyboardScroll>
     </IosPage>
   );
 }

@@ -8,6 +8,7 @@ import { colors, gradients, fontFamily, cardShadow } from "@/lib/ios6-theme";
 import { formatPhoneDisplay } from "@/lib/format";
 import {
   IosPage,
+  IosKeyboardScroll,
   IosNavBar,
   IosSectionLabel,
   IosIconCell,
@@ -70,6 +71,51 @@ export default function SettingsScreen() {
     ]);
   };
 
+  const deleteAccountMutation = trpc.auth.deleteAccount.useMutation();
+
+  /**
+   * Two-step destructive confirm. Google Play and the App Store both require
+   * in-app account deletion; the second prompt spells out what is lost, because
+   * this is irreversible and cancels any active subscription.
+   */
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Delete Account",
+      "This permanently deletes your account, watch zones, and alert history. " +
+        "Any active subscription is cancelled. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Continue",
+          style: "destructive",
+          onPress: () => {
+            Alert.alert("Are you sure?", "There is no way to recover this account.", [
+              { text: "Keep My Account", style: "cancel" },
+              {
+                text: "Delete Forever",
+                style: "destructive",
+                onPress: () => {
+                  deleteAccountMutation.mutate(
+                    { confirm: "DELETE" },
+                    {
+                      onSuccess: async () => {
+                        await AsyncStorage.removeItem("auth_user");
+                        await utils.auth.me.invalidate();
+                        router.replace("/auth/login");
+                      },
+                      onError: (err: any) =>
+                        Alert.alert("Error", err.message || "Could not delete your account."),
+                    }
+                  );
+                },
+              },
+            ]);
+          },
+        },
+      ]
+    );
+  };
+
   if (!user) {
     return (
       <IosPage style={styles.center}>
@@ -83,7 +129,7 @@ export default function SettingsScreen() {
   return (
     <IosPage>
       <IosNavBar title="Settings" />
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 24 }}>
+      <IosKeyboardScroll>
         {/* Account */}
         <View style={{ marginBottom: 24 }}>
           <IosSectionLabel>Account</IosSectionLabel>
@@ -220,14 +266,40 @@ export default function SettingsScreen() {
             <IosButton variant="red" onPress={handleLogout}>
               Sign Out
             </IosButton>
+
+            <View style={styles.dangerZone}>
+              <Text style={styles.dangerLabel}>Delete Account</Text>
+              <Text style={styles.dangerBody}>
+                Permanently removes your account, watch zones, and alert history, and cancels
+                any active subscription. This cannot be undone.
+              </Text>
+              <Pressable
+                onPress={handleDeleteAccount}
+                disabled={deleteAccountMutation.isPending}
+                hitSlop={6}
+              >
+                <Text style={styles.dangerAction}>
+                  {deleteAccountMutation.isPending ? "Deleting…" : "Delete My Account"}
+                </Text>
+              </Pressable>
+            </View>
           </View>
         </View>
-      </ScrollView>
+      </IosKeyboardScroll>
     </IosPage>
   );
 }
 
 const styles = StyleSheet.create({
+  dangerZone: {
+    marginTop: 28,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#d8d2c6",
+  },
+  dangerLabel: { fontSize: 13, fontWeight: "700", color: colors.red, fontFamily, marginBottom: 4 },
+  dangerBody: { fontSize: 12, color: colors.textLight, fontFamily, lineHeight: 17, marginBottom: 10 },
+  dangerAction: { fontSize: 14, fontWeight: "700", color: colors.red, fontFamily },
   center: { alignItems: "center", justifyContent: "center" },
   referBtnContent: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
   referBtnText: { fontSize: 17, fontWeight: "700", color: colors.textLight, fontFamily },

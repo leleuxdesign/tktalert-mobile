@@ -1,4 +1,4 @@
-// Service areas TKTAlert currently covers. Extend this list as new
+// Service areas TattleTow currently covers. Extend this list as new
 // cities/states are added — the combo picker and the map's out-of-area
 // check both read directly from here.
 export const SERVICE_AREAS = [{ city: "Milwaukee", state: "WI", label: "Milwaukee, WI" }] as const;

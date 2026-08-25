@@ -1,4 +1,4 @@
-// TKTAlert — iOS 6 Skeuomorphic Design System
+// TattleTow — iOS 6 Skeuomorphic Design System
 // Ported from tktalert-app/client/src/index.css to keep the mobile app and
 // web app visually identical.
 

@@ -31,7 +31,7 @@ import {
 } from "@/components/ios6";
 
 const DISCLAIMER =
-  "TKTAlert monitors parking complaints filed with the City of Milwaukee — not parking enforcement activity. A notification means a complaint has been filed near your registered zone. It does not mean a parking ticket has been issued, is being issued, or will be issued. TKTAlert makes no guarantee that a complaint will result in enforcement action, nor that all complaints filed in your zone will be captured. Use of this service does not constitute legal advice. TKTAlert is not affiliated with the City of Milwaukee or any municipal authority.";
+  "TattleTow monitors parking complaints filed with the City of Milwaukee — not parking enforcement activity. A notification means a complaint has been filed near your registered zone. It does not mean a parking ticket has been issued, is being issued, or will be issued. TattleTow makes no guarantee that a complaint will result in enforcement action, nor that all complaints filed in your zone will be captured. Use of this service does not constitute legal advice. TattleTow is not affiliated with the City of Milwaukee or any municipal authority.";
 
 type Step = 1 | 2 | 3 | 4 | 5 | "success";
 const STEP_TITLES: Record<number, string> = {
@@ -76,16 +76,11 @@ export default function SignupScreen() {
         if (!form.city.trim()) return setError("Please select a city.");
         setStep(2);
       } else if (step === 2) {
+        // Validate only. The account is deliberately NOT created here — see the
+        // comment on step 5 — so abandoning the wizard leaves nothing behind.
         if (!form.email.trim()) return setError("Email is required.");
         if (!form.password || form.password.length < 8)
           return setError("Password must be at least 8 characters.");
-        const data: any = await registerMutation.mutateAsync({
-          email: form.email.trim().toLowerCase(),
-          password: form.password,
-        });
-        if (data?.user) await AsyncStorage.setItem("auth_user", JSON.stringify(data.user));
-        await utils.auth.me.invalidate();
-        if (form.phone.trim()) await updateProfile.mutateAsync({ phone: form.phone.trim() });
         setStep(3);
       } else if (step === 3) {
         if (!form.street.trim()) return setError("Street name is required.");
@@ -96,6 +91,31 @@ export default function SignupScreen() {
         setStep(5);
       } else if (step === 5) {
         if (!form.consentChecked) return setError("You must accept the disclaimer to continue.");
+
+        // Register last, then run the follow-up mutations on the session cookie
+        // that register sets.
+        //
+        // auth.me is deliberately NOT invalidated here: the root AuthGuard
+        // redirects out of the `auth` group the moment it sees an authenticated
+        // user, and invalidating mid-wizard is exactly what used to fire that
+        // redirect early — skipping address, zone, and consent entirely and
+        // leaving every new account with consentGivenAt NULL and zero zones.
+        // The refresh happens on the success screen instead.
+        let data: any;
+        try {
+          data = await registerMutation.mutateAsync({
+            email: form.email.trim().toLowerCase(),
+            password: form.password,
+          });
+        } catch (err: any) {
+          // Send them back to the account step, where the email lives.
+          setStep(2);
+          setError(err?.message ?? "Could not create that account. Try a different email.");
+          return;
+        }
+
+        if (data?.user) await AsyncStorage.setItem("auth_user", JSON.stringify(data.user));
+        if (form.phone.trim()) await updateProfile.mutateAsync({ phone: form.phone.trim() });
         await recordConsent.mutateAsync();
         await createZone.mutateAsync({
           street: form.street,
@@ -129,7 +149,15 @@ export default function SignupScreen() {
             .
           </Text>
           <View style={{ paddingHorizontal: 16, width: "100%" }}>
-            <IosButton variant="blue" onPress={() => router.replace("/tabs/dashboard")}>
+            <IosButton
+              variant="blue"
+              onPress={async () => {
+                // Now that the wizard is finished it is safe to let the guard
+                // see the authenticated session.
+                await utils.auth.me.invalidate();
+                router.replace("/tabs/dashboard");
+              }}
+            >
               Go to Dashboard →
             </IosButton>
           </View>
@@ -149,7 +177,7 @@ export default function SignupScreen() {
       />
       <IosStepDots total={5} current={currentStepNum} />
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 32 }}>
           {error ? <IosErrorBanner>{error}</IosErrorBanner> : null}
 
@@ -157,7 +185,7 @@ export default function SignupScreen() {
             <View>
               <View style={styles.stepHeader}>
                 <Text style={styles.stepTitle}>Select Your City</Text>
-                <Text style={styles.stepSubtitle}>TKTAlert currently covers Milwaukee, WI.</Text>
+                <Text style={styles.stepSubtitle}>TattleTow currently covers Milwaukee, WI.</Text>
               </View>
               <IosTable style={{ marginHorizontal: 16 }}>
                 <IosTableRow onPress={() => updateForm("city", "Milwaukee")} last>
@@ -302,7 +330,7 @@ export default function SignupScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.consentText}>
-                      I have read and agree to the disclaimer above. I understand that TKTAlert
+                      I have read and agree to the disclaimer above. I understand that TattleTow
                       monitors complaints, not enforcement activity.
                     </Text>
                     {form.consentTimestamp ? (

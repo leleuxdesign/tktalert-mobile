@@ -37,7 +37,7 @@ export default function ForgotPasswordScreen() {
   return (
     <IosPage>
       <IosNavBar title="Reset Password" onBack={() => router.back()} backLabel="Sign In" />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingTop: 40 }}>
           <View style={styles.header}>
             <IosAppIcon size={64} gradient={gradients.appIconBlue}>

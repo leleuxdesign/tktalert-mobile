@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { View, Text, ScrollView, RefreshControl, ActivityIndicator, StyleSheet, Pressable } from "react-native";
+import { View, Text, ScrollView, RefreshControl, ActivityIndicator, StyleSheet, Pressable, Alert, Linking } from "react-native";
 import { useRouter, Link } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Bell, AlertCircle, ChevronRight, Car } from "lucide-react-native";
@@ -26,7 +26,12 @@ interface User {
   role: string;
   subscriptionStatus: string;
   trialEndsAt?: string;
+  graceUntil?: string | null;
 }
+
+const RENEW_URL = "https://app.tattletow.com/subscribe";
+/** Key for the once-per-day throttle on the grace prompt. */
+const GRACE_PROMPT_KEY = "grace_prompt_last_shown";
 
 export default function DashboardScreen() {
   const router = useRouter();
@@ -46,6 +51,42 @@ export default function DashboardScreen() {
 
   const meQuery = trpc.auth.me.useQuery();
   const user: User | null = meQuery.data ?? cachedUser;
+
+  // Daily renewal prompt while a failed payment is in its grace window.
+  // The server sends push/email/SMS on the same 24h cadence; this covers the
+  // case where notifications are denied or ignored — opening the app is the one
+  // moment we're guaranteed to reach them before alerts stop.
+  useEffect(() => {
+    const graceUntil = user?.graceUntil;
+    if (!graceUntil) return;
+
+    const graceEnd = new Date(graceUntil).getTime();
+    if (!Number.isFinite(graceEnd) || graceEnd <= Date.now()) return;
+
+    const todayKey = new Date().toISOString().slice(0, 10);
+    let cancelled = false;
+
+    AsyncStorage.getItem(GRACE_PROMPT_KEY).then((lastShown) => {
+      if (cancelled || lastShown === todayKey) return;
+      AsyncStorage.setItem(GRACE_PROMPT_KEY, todayKey);
+
+      const daysLeft = Math.max(1, Math.ceil((graceEnd - Date.now()) / 86400000));
+      Alert.alert(
+        "Payment failed",
+        `We couldn't process your payment. Your alerts stay on for ${daysLeft} more ` +
+          `day${daysLeft !== 1 ? "s" : ""}, then they'll pause until you renew.\n\n` +
+          `Nothing will be deleted — your watch zones stay exactly as they are.`,
+        [
+          { text: "Later", style: "cancel" },
+          { text: "Renew Now", onPress: () => Linking.openURL(RENEW_URL) },
+        ]
+      );
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.graceUntil]);
 
   const zonesQuery = trpc.zones.list.useQuery(undefined, { enabled: !!user });
   const alertsQuery = trpc.alerts.myAlerts.useQuery({ limit: 5 }, { enabled: !!user });
@@ -67,9 +108,18 @@ export default function DashboardScreen() {
 
   if (!user) return null; // AuthGuard in root layout handles redirect to login
 
-  if (user.subscriptionStatus === "lapsed" || (user.subscriptionStatus as string) === "cancelled") {
-    return <RenewScreen />;
-  }
+  // A lapsed account is paused, not locked. The user keeps full read access to
+  // their zones, alert history, and settings — only notifications stop. Blocking
+  // the whole dashboard hid the very thing they need to see: that their data is
+  // intact and what to do about it.
+  const isPaused =
+    user.subscriptionStatus === "lapsed" || (user.subscriptionStatus as string) === "cancelled";
+
+  const graceEndMs = user.graceUntil ? new Date(user.graceUntil).getTime() : NaN;
+  const graceDaysLeft =
+    Number.isFinite(graceEndMs) && graceEndMs > Date.now()
+      ? Math.max(1, Math.ceil((graceEndMs - Date.now()) / 86400000))
+      : null;
 
   const trialDaysLeft = user.trialEndsAt
     ? Math.max(0, Math.ceil((new Date(user.trialEndsAt).getTime() - Date.now()) / 86400000))
@@ -82,23 +132,68 @@ export default function DashboardScreen() {
     user.subscriptionStatus === "active" ||
     user.subscriptionStatus === "comped" ||
     user.subscriptionStatus === "trial";
-  const statusLabel = isActiveStatus ? "Active" : "Inactive";
+  const statusLabel = isActiveStatus ? "Active" : isPaused ? "Paused" : "Inactive";
   const statusColor = isActiveStatus ? colors.green : colors.red;
 
   return (
     <IosPage>
-      <IosNavBar title="TKTAlert" />
+      <IosNavBar title="TattleTow" />
       <ScrollView
         contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.blue} />}
       >
-        {user.subscriptionStatus === "trial" && trialDaysLeft !== null && (
+        {isPaused && (
+          <View style={styles.trialBannerWrap}>
+            <View style={styles.pausedBanner}>
+              <Text style={styles.pausedTitle}>⏸ Alerts paused</Text>
+              <Text style={styles.pausedBody}>
+                Your subscription ended, so we've stopped sending alerts. Nothing has been
+                deleted —{" "}
+                {zones.length > 0
+                  ? `your ${zones.length} watch zone${zones.length !== 1 ? "s are" : " is"} saved and `
+                  : "your account and history are intact and "}
+                alerts resume automatically the moment you renew.
+              </Text>
+              {/*
+                Points at the web app's real checkout. Revisit before the iOS
+                submission in v1.5 — App Store rules on external purchase links
+                are stricter than Play's, and Session 1 deliberately stripped
+                purchase UI from the app for exactly that reason.
+              */}
+              <Text
+                style={styles.pausedLink}
+                onPress={() => Linking.openURL("https://app.tattletow.com/subscribe")}
+              >
+                Renew my subscription →
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {!isPaused && graceDaysLeft !== null && (
+          <View style={styles.trialBannerWrap}>
+            <View style={styles.graceBanner}>
+              <Text style={styles.graceTitle}>
+                ⚠️ Payment failed — {graceDaysLeft} day{graceDaysLeft !== 1 ? "s" : ""} left
+              </Text>
+              <Text style={styles.graceBody}>
+                Your alerts are still running. Renew before the {graceDaysLeft} day
+                {graceDaysLeft !== 1 ? "s are" : " is"} up and nothing changes.
+              </Text>
+              <Text style={styles.pausedLink} onPress={() => Linking.openURL(RENEW_URL)}>
+                Renew my subscription →
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {!isPaused && graceDaysLeft === null && user.subscriptionStatus === "trial" && trialDaysLeft !== null && (
           <View style={styles.trialBannerWrap}>
             <View style={styles.trialBanner}>
               <Text style={styles.trialText}>
                 🕐 {trialDaysLeft} day{trialDaysLeft !== 1 ? "s" : ""} left in free trial
               </Text>
-              <Text style={styles.trialSubtext}>Subscribe at tktalert.net</Text>
+              <Text style={styles.trialSubtext}>Subscribe at tattletow.com</Text>
             </View>
           </View>
         )}
@@ -112,7 +207,9 @@ export default function DashboardScreen() {
         {zones.length > 0 && (
           <IosCard style={styles.activityCard}>
             <View style={styles.activityHeaderRow}>
-              <Text style={styles.activityTitle}>👀 TKTAlert is watching</Text>
+              <Text style={styles.activityTitle}>
+                {isPaused ? "⏸ Watching paused" : "👀 TattleTow is watching"}
+              </Text>
               <Pressable onPress={() => setDisclaimerVisible(true)} hitSlop={8} style={styles.disclaimerBtn}>
                 <Car size={14} color={colors.textLight} />
               </Pressable>
@@ -133,7 +230,7 @@ export default function DashboardScreen() {
                 <Text style={styles.activityLabel}>This Month</Text>
               </View>
             </View>
-            <Text style={styles.activityFootnote}>Total complaints scanned by TKTAlert</Text>
+            <Text style={styles.activityFootnote}>Total complaints scanned by TattleTow</Text>
           </IosCard>
         )}
 
@@ -208,24 +305,26 @@ export default function DashboardScreen() {
   );
 }
 
-function RenewScreen() {
-  return (
-    <IosPage style={styles.center}>
-      <View style={{ alignItems: "center", paddingHorizontal: 20 }}>
-        <View style={styles.renewIcon}>
-          <Bell size={36} color="#fff" />
-        </View>
-        <Text style={styles.renewTitle}>Subscription Lapsed</Text>
-        <Text style={styles.renewBody}>
-          Renew to continue receiving parking complaint alerts for your watch zones.
-        </Text>
-        <Text style={styles.renewLink}>Manage your subscription at tktalert.net</Text>
-      </View>
-    </IosPage>
-  );
-}
-
 const styles = StyleSheet.create({
+  graceBanner: {
+    backgroundColor: "#fff4e0",
+    borderWidth: 1,
+    borderColor: "#e8c07a",
+    borderRadius: 10,
+    padding: 14,
+  },
+  graceTitle: { fontSize: 15, fontWeight: "700", color: "#7a4c00", fontFamily, marginBottom: 6 },
+  graceBody: { fontSize: 13, color: "#7a4c00", fontFamily, lineHeight: 19 },
+  pausedBanner: {
+    backgroundColor: "#fdecea",
+    borderWidth: 1,
+    borderColor: "#f0b4ae",
+    borderRadius: 10,
+    padding: 14,
+  },
+  pausedTitle: { fontSize: 15, fontWeight: "700", color: "#8c1d13", fontFamily, marginBottom: 6 },
+  pausedBody: { fontSize: 13, color: "#8c1d13", fontFamily, lineHeight: 19 },
+  pausedLink: { fontSize: 14, fontWeight: "700", color: "#1a7fd4", fontFamily, marginTop: 10 },
   center: { alignItems: "center", justifyContent: "center" },
   trialBannerWrap: { marginBottom: 16 },
   trialBanner: {
@@ -257,8 +356,4 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 14, color: colors.textLight, fontFamily },
   emptySubtext: { fontSize: 12, color: colors.textFaint, marginTop: 2, textAlign: "center", fontFamily },
   emptyAlertsBox: { alignItems: "center", paddingVertical: 16, gap: 4 },
-  renewIcon: { width: 72, height: 72, borderRadius: 16, backgroundColor: colors.red, alignItems: "center", justifyContent: "center", marginBottom: 16 },
-  renewTitle: { fontSize: 22, fontWeight: "700", color: colors.text, marginBottom: 6, fontFamily },
-  renewBody: { fontSize: 14, color: colors.textLight, textAlign: "center", marginBottom: 28, fontFamily },
-  renewLink: { fontSize: 14, fontWeight: "700", color: colors.blue, textAlign: "center", fontFamily },
 });

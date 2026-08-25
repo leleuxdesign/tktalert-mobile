@@ -10,6 +10,11 @@ import {
   ViewStyle,
   StyleProp,
   Modal,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  ScrollViewProps,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -502,7 +507,7 @@ export function IosErrorBanner({ children }: { children: React.ReactNode }) {
 
 // ── Disclaimer modal (patrol-detection notice) ────────────────────────────
 export const PATROL_DISCLAIMER_TEXT =
-  "TKTAlert monitors parking complaints filed with the city — it does not detect active parking enforcement patrols.";
+  "TattleTow monitors parking complaints filed with the city — it does not detect active parking enforcement patrols.";
 
 export function IosDisclaimerModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   return (
@@ -529,6 +534,68 @@ export function IosPage({ children, style }: { children: React.ReactNode; style?
     <SafeAreaView edges={["top"]} style={[styles.page, style]}>
       {children}
     </SafeAreaView>
+  );
+}
+
+/**
+ * Scrolling container for any screen with text inputs, so the on-screen keyboard
+ * never covers the field being typed into.
+ *
+ * Why the extra bottom padding rather than just KeyboardAvoidingView: whether the
+ * Android window shrinks when the keyboard opens depends on the *native*
+ * `softwareKeyboardLayoutMode` (set to "resize" in app.json). Expo Go ships its own
+ * manifest and ignores that, so in the dev client the keyboard simply overlays a
+ * full-height viewport and there is nothing left to scroll — which is exactly how
+ * fields ended up hidden.
+ *
+ * Reserving the keyboard's height as scrollable padding works in both modes. When
+ * the window does resize, the extra space is merely scrollable slack; when it does
+ * not, it is what makes the lower fields reachable at all.
+ *
+ * `behavior` stays undefined on Android so KeyboardAvoidingView doesn't apply a
+ * second inset on top of this one.
+ *
+ * `keyboardShouldPersistTaps="handled"` keeps buttons tappable while a field has
+ * focus; without it the first tap is swallowed dismissing the keyboard.
+ */
+export function IosKeyboardScroll({
+  children,
+  contentContainerStyle,
+  ...props
+}: ScrollViewProps & { children: React.ReactNode }) {
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  React.useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const onShow = Keyboard.addListener(showEvent, (e) =>
+      setKeyboardHeight(e.endCoordinates?.height ?? 0)
+    );
+    const onHide = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
+    return () => {
+      onShow.remove();
+      onHide.remove();
+    };
+  }, []);
+
+  return (
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        contentContainerStyle={[
+          { padding: 16 },
+          contentContainerStyle,
+          { paddingBottom: 32 + keyboardHeight },
+        ]}
+        {...props}
+      >
+        {children}
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

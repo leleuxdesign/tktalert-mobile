@@ -27,6 +27,7 @@ const appRouter = t.router({
     changePassword: t.procedure.input(passthrough).mutation((): any => ({})),
     savePushToken: t.procedure.input(passthrough).mutation((): any => ({})),
     recordConsent: t.procedure.mutation((): any => ({})),
+    deleteAccount: t.procedure.input(passthrough).mutation((): any => ({})),
   }),
   zones: t.router({
     list: t.procedure.query((): any[] => []),

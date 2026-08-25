@@ -9,6 +9,7 @@ import { ReverseGeocodeResult } from "@/lib/geocode";
 import { AddressMapPicker } from "@/components/AddressMapPicker";
 import {
   IosPage,
+  IosKeyboardScroll,
   IosNavBar,
   IosSectionLabel,
   IosZoneTile,
@@ -81,7 +82,7 @@ export default function WatchZonesScreen() {
       });
       Alert.alert(
         "Outside of Service Area",
-        "TKTAlert doesn't cover that location yet — Coming Soon! We've logged your interest to help us prioritize where to expand next."
+        "TattleTow doesn't cover that location yet — Coming Soon! We've logged your interest to help us prioritize where to expand next."
       );
       return;
     }
@@ -108,7 +109,7 @@ export default function WatchZonesScreen() {
   return (
     <IosPage>
       <IosNavBar title="Manage Zones" onBack={() => router.back()} />
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
+      <IosKeyboardScroll>
         <IosSectionLabel>Your Watch Zones</IosSectionLabel>
 
         {zones.length > 0 ? (
@@ -205,7 +206,7 @@ export default function WatchZonesScreen() {
             </View>
           </IosCard>
         )}
-      </ScrollView>
+      </IosKeyboardScroll>
 
       <AddressMapPicker visible={showMap} onClose={() => setShowMap(false)} onConfirm={handleMapConfirm} />
       <IosDisclaimerModal visible={showDisclaimer} onClose={() => setShowDisclaimer(false)} />

@@ -5,7 +5,9 @@ import type { AppRouter } from "./router-types";
 
 export const trpc = createTRPCReact<AppRouter>();
 
-const API_URL = "https://tktalert.net";
+// Whatever host ships in a store build is what every installed copy calls until
+// the user updates — so this must be the canonical domain, not a redirect source.
+const API_URL = "https://app.tattletow.com";
 
 export function createTRPCClient() {
   return trpc.createClient({

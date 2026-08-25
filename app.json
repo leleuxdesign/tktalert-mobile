@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "TKTAlert — Parking Ticket Alerts",
+    "name": "TattleTow",
     "slug": "tktalert",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "tktalert",
+    "scheme": "tattletow",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
@@ -15,10 +15,10 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "net.tktalert.app",
+      "bundleIdentifier": "net.tattletow.app",
       "buildNumber": "1",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "TKTAlert uses your location to monitor parking complaints near your registered address.",
+        "NSLocationWhenInUseUsageDescription": "TattleTow uses your location to monitor parking complaints near your registered address.",
         "UIBackgroundModes": [
           "remote-notification"
         ]
@@ -29,8 +29,9 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#e8e4dc"
       },
-      "package": "net.tktalert.app",
+      "package": "net.tattletow.app",
       "versionCode": 1,
+      "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE",
@@ -49,7 +50,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "TKTAlert uses your location to help you find your address on the map when adding a watch zone."
+          "locationWhenInUsePermission": "TattleTow uses your location to help you find your address on the map when adding a watch zone."
         }
       ],
       [

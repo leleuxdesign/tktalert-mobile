@@ -14,7 +14,7 @@ export interface ReverseGeocodeResult {
 export async function reverseGeocode(lat: number, lng: number): Promise<ReverseGeocodeResult | null> {
   const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&addressdetails=1`;
   const res = await fetch(url, {
-    headers: { "User-Agent": "TKTAlert/1.0 (parking complaint alerts)" },
+    headers: { "User-Agent": "TattleTow/1.0 (parking complaint alerts)" },
   });
   if (!res.ok) return null;
   const data = await res.json();

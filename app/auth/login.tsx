@@ -44,13 +44,13 @@ export default function LoginScreen() {
 
   return (
     <IosPage>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingTop: 40, paddingBottom: 40 }}>
           <View style={styles.header}>
             <IosAppIcon gradient={gradients.appIconBlue}>
               <Bell size={40} color="#fff" strokeWidth={2} />
             </IosAppIcon>
-            <Text style={styles.title}>TKTAlert</Text>
+            <Text style={styles.title}>TattleTow</Text>
             <Text style={styles.subtitle}>Sign in to your account</Text>
           </View>
 
@@ -91,7 +91,7 @@ export default function LoginScreen() {
 
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>NEW TO TKTALERT?</Text>
+            <Text style={styles.dividerText}>NEW TO TATTLETOW?</Text>
             <View style={styles.dividerLine} />
           </View>
 
