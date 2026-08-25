@@ -1,7 +1,7 @@
-# TKTAlert Mobile — Expo App
+# TattleTow Mobile — Expo App
 
-React Native / Expo app for TKTAlert — Parking Ticket Alerts.
-Connects to the EC2 backend at `https://api.tktalert.net`.
+React Native / Expo app for TattleTow — Parking Ticket Alerts.
+Connects to the EC2 backend at `https://app.tattletow.com`.
 
 ---
 
@@ -25,7 +25,7 @@ hooks/
   useAuth.ts           — Auth state from AsyncStorage
   usePushNotifications.ts — Expo push token registration
 lib/
-  trpc.ts              — tRPC client → api.tktalert.net
+  trpc.ts              — tRPC client → app.tattletow.com
   router-types.ts      — AppRouter type stub
 assets/                — App icon, splash, adaptive icon
 ```
@@ -127,28 +127,27 @@ npm run submit:android
 ### Google (FCM)
 
 1. Go to **Firebase Console** → https://console.firebase.google.com
-2. Create a new project (or use existing) named `tktalert`
-3. Add an Android app with package name `net.tktalert.app`
+2. Create a new project (or use existing) named `tattletow`
+3. Add an Android app with package name `net.tattletow.app`
 4. Download `google-services.json` and place it in the project root
 5. In Firebase Console → Project Settings → Cloud Messaging → copy the **Server Key**
 6. In your Expo project dashboard → Credentials → Android → FCM → paste the server key
 
 ### Backend — Register Push Token
 
-After setup, the `usePushNotifications` hook registers the device token.
-You need to add a backend procedure to save it:
+Already wired. `usePushNotifications` obtains the Expo token and `app/_layout.tsx`
+saves it via `auth.savePushToken` once the user is authenticated.
+
+Note the input field is **`expoPushToken`**, not `token`:
 
 ```ts
-// In server/routers.ts — add to the auth/user router
+// server/routers.ts
 savePushToken: protectedProcedure
-  .input(z.object({ token: z.string() }))
-  .mutation(async ({ ctx, input }) => {
-    await db.updateUserPushToken(ctx.user.id, input.token);
-    return { ok: true };
-  }),
+  .input(z.object({ expoPushToken: z.string().min(1) }))
 ```
 
-Then in `app/_layout.tsx`, call this mutation when `expoPushToken` is available.
+`server/scanner.ts` then sends push as a third alert channel alongside SMS and
+email, recorded in `alerts_sent` with the same success/failure tracking.
 
 ---
 
@@ -156,16 +155,16 @@ Then in `app/_layout.tsx`, call this mutation when `expoPushToken` is available.
 
 ### iOS App Store
 
-- **App Name:** TKTAlert — Parking Ticket Alerts
-- **Bundle ID:** `net.tktalert.app`
+- **App Name:** TattleTow — Parking Ticket Alerts
+- **Bundle ID:** `net.tattletow.app`
 - **Category:** Utilities
 - **Age Rating:** 4+
-- **Privacy Policy URL:** https://tktalert.net/privacy
-- **Support URL:** https://tktalert.net/support
+- **Privacy Policy URL:** https://tattletow.com/privacy
+- **Support URL:** https://tattletow.com/support
 
 ### Google Play Store
 
-- **Package Name:** `net.tktalert.app`
+- **Package Name:** `net.tattletow.app`
 - **Category:** Tools
 - **Content Rating:** Everyone
 
@@ -175,7 +174,7 @@ Then in `app/_layout.tsx`, call this mutation when `expoPushToken` is available.
 
 The API base URL is hardcoded in `lib/trpc.ts`:
 ```ts
-const API_URL = "https://api.tktalert.net";
+const API_URL = "https://app.tattletow.com";
 ```
 
 To change it for development, update this value directly.
@@ -184,5 +183,5 @@ To change it for development, update this value directly.
 
 ## Disclaimer
 
-TKTAlert monitors publicly available city data. Alerts are informational only
+TattleTow monitors publicly available city data. Alerts are informational only
 and do not guarantee ticket prevention. Not affiliated with the City of Milwaukee.
