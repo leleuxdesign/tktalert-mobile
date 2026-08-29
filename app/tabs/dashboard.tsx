@@ -25,7 +25,6 @@ interface User {
   email: string;
   role: string;
   subscriptionStatus: string;
-  trialEndsAt?: string;
   graceUntil?: string | null;
 }
 
@@ -121,17 +120,11 @@ export default function DashboardScreen() {
       ? Math.max(1, Math.ceil((graceEndMs - Date.now()) / 86400000))
       : null;
 
-  const trialDaysLeft = user.trialEndsAt
-    ? Math.max(0, Math.ceil((new Date(user.trialEndsAt).getTime() - Date.now()) / 86400000))
-    : null;
-
   const zones = zonesQuery.data ?? [];
   const alerts = alertsQuery.data ?? [];
 
   const isActiveStatus =
-    user.subscriptionStatus === "active" ||
-    user.subscriptionStatus === "comped" ||
-    user.subscriptionStatus === "trial";
+    user.subscriptionStatus === "active" || user.subscriptionStatus === "comped";
   const statusLabel = isActiveStatus ? "Active" : isPaused ? "Paused" : "Inactive";
   const statusColor = isActiveStatus ? colors.green : colors.red;
 
@@ -143,7 +136,7 @@ export default function DashboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.blue} />}
       >
         {isPaused && (
-          <View style={styles.trialBannerWrap}>
+          <View style={styles.bannerWrap}>
             <View style={styles.pausedBanner}>
               <Text style={styles.pausedTitle}>⏸ Alerts paused</Text>
               <Text style={styles.pausedBody}>
@@ -171,7 +164,7 @@ export default function DashboardScreen() {
         )}
 
         {!isPaused && graceDaysLeft !== null && (
-          <View style={styles.trialBannerWrap}>
+          <View style={styles.bannerWrap}>
             <View style={styles.graceBanner}>
               <Text style={styles.graceTitle}>
                 ⚠️ Payment failed — {graceDaysLeft} day{graceDaysLeft !== 1 ? "s" : ""} left
@@ -183,17 +176,6 @@ export default function DashboardScreen() {
               <Text style={styles.pausedLink} onPress={() => Linking.openURL(RENEW_URL)}>
                 Renew my subscription →
               </Text>
-            </View>
-          </View>
-        )}
-
-        {!isPaused && graceDaysLeft === null && user.subscriptionStatus === "trial" && trialDaysLeft !== null && (
-          <View style={styles.trialBannerWrap}>
-            <View style={styles.trialBanner}>
-              <Text style={styles.trialText}>
-                🕐 {trialDaysLeft} day{trialDaysLeft !== 1 ? "s" : ""} left in free trial
-              </Text>
-              <Text style={styles.trialSubtext}>Subscribe at tattletow.com</Text>
             </View>
           </View>
         )}
@@ -326,15 +308,7 @@ const styles = StyleSheet.create({
   pausedBody: { fontSize: 13, color: "#8c1d13", fontFamily, lineHeight: 19 },
   pausedLink: { fontSize: 14, fontWeight: "700", color: "#1a7fd4", fontFamily, marginTop: 10 },
   center: { alignItems: "center", justifyContent: "center" },
-  trialBannerWrap: { marginBottom: 16 },
-  trialBanner: {
-    padding: 12,
-    paddingHorizontal: 14,
-    backgroundColor: "#ffb400",
-    borderRadius: 10,
-  },
-  trialText: { fontSize: 14, fontWeight: "600", color: "#5a3800", fontFamily },
-  trialSubtext: { fontSize: 12, fontWeight: "600", color: "#5a3800", fontFamily, marginTop: 4 },
+  bannerWrap: { marginBottom: 16 },
   statsRow: { flexDirection: "row", gap: 10, marginBottom: 16 },
   activityCard: { padding: 14, marginBottom: 20 },
   activityHeaderRow: { marginBottom: 10, position: "relative", justifyContent: "center" },

@@ -17,11 +17,10 @@ import {
   IosErrorBanner,
 } from "@/components/ios6";
 
-const STATUS_OPTIONS = ["trial", "active", "lapsed", "cancelled", "comped"] as const;
+const STATUS_OPTIONS = ["active", "lapsed", "cancelled", "comped"] as const;
 
 function statusGradient(status: string) {
   if (status === "active" || status === "comped") return gradients.badgeGreen;
-  if (status === "trial") return gradients.badgeOrange;
   return gradients.badgeRed;
 }
 
@@ -43,7 +42,7 @@ export default function AdminUserDetailScreen() {
   const alertsQuery = trpc.adminUsers.getAlerts.useQuery({ userId, limit: 50 }, { enabled: !!userId });
   const user = userQuery.data?.user;
 
-  const [status, setStatus] = useState<string>("trial");
+  const [status, setStatus] = useState<string>("active");
   const [role, setRole] = useState<string>("user");
   const [isComped, setIsComped] = useState(false);
 

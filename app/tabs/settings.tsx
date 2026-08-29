@@ -202,8 +202,6 @@ export default function SettingsScreen() {
                   ? "Comped (Free)"
                   : user.subscriptionStatus === "active"
                   ? "Active Subscription"
-                  : user.subscriptionStatus === "trial"
-                  ? "Free Trial"
                   : "Lapsed"}
               </Text>
             </View>
@@ -212,8 +210,6 @@ export default function SettingsScreen() {
                 gradient={
                   user.subscriptionStatus === "active" || user.subscriptionStatus === "comped"
                     ? gradients.badgeGreen
-                    : user.subscriptionStatus === "trial"
-                    ? gradients.badgeOrange
                     : gradients.badgeRed
                 }
               >

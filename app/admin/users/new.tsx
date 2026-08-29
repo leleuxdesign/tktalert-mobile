@@ -119,7 +119,7 @@ export default function AdminNewUserScreen() {
             Create Account
           </IosButton>
           <Text style={styles.hintText}>
-            New accounts are created as comped (free access) with no trial expiration.
+            New accounts are created as comped (free access).
           </Text>
         </View>
       </IosKeyboardScroll>

@@ -53,7 +53,6 @@ export const gradients = {
   badgeGreen: ["#7de87d", "#4cd964", "#2db94d"] as const,
   badgeOrange: ["#ffd060", "#ff9500"] as const,
   glossHighlight: ["rgba(255,255,255,0.4)", "rgba(255,255,255,0.1)"] as const,
-  trialBanner: ["#ffd060", "#ffb400"] as const,
 };
 
 export const cardShadow = {

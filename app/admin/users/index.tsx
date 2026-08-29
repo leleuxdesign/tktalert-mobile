@@ -17,7 +17,6 @@ import {
 
 function statusGradient(status: string) {
   if (status === "active" || status === "comped") return gradients.badgeGreen;
-  if (status === "trial") return gradients.badgeOrange;
   return gradients.badgeRed;
 }
 
