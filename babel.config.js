@@ -15,7 +15,9 @@ module.exports = function (api) {
           },
         },
       ],
-      "react-native-reanimated/plugin",
+      // Reanimated v4 (SDK 54): the worklets Babel transform moved out of
+      // react-native-reanimated into react-native-worklets.
+      "react-native-worklets/plugin",
     ],
   };
 };
