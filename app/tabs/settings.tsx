@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { CreditCard, MapPin, ChevronRight, Gift, Shield } from "lucide-react-native";
+import * as Linking from "expo-linking";
+import { CreditCard, ExternalLink, MapPin, ChevronRight, Gift, Shield } from "lucide-react-native";
 import { trpc } from "@/lib/trpc";
 import { colors, gradients, fontFamily, cardShadow } from "@/lib/ios6-theme";
 import { formatPhoneDisplay } from "@/lib/format";
@@ -71,6 +72,40 @@ export default function SettingsScreen() {
     ]);
   };
 
+  /**
+   * BL-7: self-serve subscription management. The server creates a Stripe
+   * billing-portal session (hosted by Stripe — cancel/card-update happen
+   * there), and we hand the URL to the external browser. No purchase UI
+   * lives in the app; this only links out, matching the v1.0 login-only
+   * billing pattern.
+   */
+  const billingPortalMutation = trpc.stripe.createBillingPortalSession.useMutation({
+    onSuccess: async (data) => {
+      const url = data?.url;
+      if (!url) {
+        Alert.alert(
+          "Something went wrong",
+          "We couldn't open your subscription settings. Please try again, or manage your subscription at tattletow.com."
+        );
+        return;
+      }
+      try {
+        await Linking.openURL(url);
+      } catch {
+        Alert.alert(
+          "Couldn't open browser",
+          "Please visit tattletow.com to manage your subscription."
+        );
+      }
+    },
+    onError: () => {
+      Alert.alert(
+        "Something went wrong",
+        "We couldn't open your subscription settings. Please try again, or manage your subscription at tattletow.com."
+      );
+    },
+  });
+
   const deleteAccountMutation = trpc.auth.deleteAccount.useMutation();
 
   /**
@@ -125,6 +160,11 @@ export default function SettingsScreen() {
   }
 
   const zoneCount = zonesQuery.data?.length ?? 0;
+
+  // Stripe-billed users only (active or lapsed). Comped accounts have no
+  // Stripe customer, so a billing-portal session cannot be created for them.
+  const hasStripeSubscription =
+    user.subscriptionStatus === "active" || user.subscriptionStatus === "lapsed";
 
   return (
     <IosPage>
@@ -189,33 +229,66 @@ export default function SettingsScreen() {
         {/* Subscription */}
         <View style={{ marginBottom: 24 }}>
           <IosSectionLabel>Subscription</IosSectionLabel>
-          <View style={styles.wideCard}>
-            <View style={styles.wideCardIcon}>
-              <IosIconCell gradient={[colors.purple, colors.purpleDark]}>
-                <CreditCard size={18} color="#fff" />
-              </IosIconCell>
+          <View style={{ gap: 10 }}>
+            <View style={styles.wideCard}>
+              <View style={styles.wideCardIcon}>
+                <IosIconCell gradient={[colors.purple, colors.purpleDark]}>
+                  <CreditCard size={18} color="#fff" />
+                </IosIconCell>
+              </View>
+              <View style={styles.wideCardBody}>
+                <Text style={styles.wideCardTitle}>Current Plan</Text>
+                <Text style={styles.wideCardSubtitle}>
+                  {user.subscriptionStatus === "comped"
+                    ? "Comped (Free)"
+                    : user.subscriptionStatus === "active"
+                    ? "Active Subscription"
+                    : "Lapsed"}
+                </Text>
+              </View>
+              <View style={styles.wideCardTrailing}>
+                <IosBadge
+                  gradient={
+                    user.subscriptionStatus === "active" || user.subscriptionStatus === "comped"
+                      ? gradients.badgeGreen
+                      : gradients.badgeRed
+                  }
+                >
+                  {user.subscriptionStatus}
+                </IosBadge>
+              </View>
             </View>
-            <View style={styles.wideCardBody}>
-              <Text style={styles.wideCardTitle}>Current Plan</Text>
-              <Text style={styles.wideCardSubtitle}>
-                {user.subscriptionStatus === "comped"
-                  ? "Comped (Free)"
-                  : user.subscriptionStatus === "active"
-                  ? "Active Subscription"
-                  : "Lapsed"}
-              </Text>
-            </View>
-            <View style={styles.wideCardTrailing}>
-              <IosBadge
-                gradient={
-                  user.subscriptionStatus === "active" || user.subscriptionStatus === "comped"
-                    ? gradients.badgeGreen
-                    : gradients.badgeRed
-                }
+            {hasStripeSubscription && (
+              <Pressable
+                onPress={() => billingPortalMutation.mutate()}
+                disabled={billingPortalMutation.isPending}
               >
-                {user.subscriptionStatus}
-              </IosBadge>
-            </View>
+                {({ pressed }) => (
+                  <View style={[styles.wideCard, pressed && { opacity: 0.85 }]}>
+                    <View style={styles.wideCardIcon}>
+                      <IosIconCell gradient={gradients.iconBlue}>
+                        <ExternalLink size={18} color="#fff" />
+                      </IosIconCell>
+                    </View>
+                    <View style={styles.wideCardBody}>
+                      <Text style={styles.wideCardTitle}>Manage Subscription</Text>
+                      <Text style={styles.wideCardSubtitle}>
+                        {billingPortalMutation.isPending
+                          ? "Opening…"
+                          : "Cancel or update billing in your browser"}
+                      </Text>
+                    </View>
+                    <View style={styles.wideCardTrailing}>
+                      {billingPortalMutation.isPending ? (
+                        <ActivityIndicator color={colors.blue} />
+                      ) : (
+                        <ChevronRight size={20} color={colors.silver} />
+                      )}
+                    </View>
+                  </View>
+                )}
+              </Pressable>
+            )}
           </View>
         </View>
 
