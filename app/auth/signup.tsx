@@ -9,6 +9,7 @@ import {
   Pressable,
 } from "react-native";
 import { Link, useRouter } from "expo-router";
+import * as Linking from "expo-linking";
 import { MapPin, ChevronRight, Check } from "lucide-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { trpc } from "@/lib/trpc";
@@ -29,6 +30,10 @@ import {
   IosCard,
   IosAppIcon,
 } from "@/components/ios6";
+import SmsConsentBlock from "@/components/SmsConsentBlock";
+
+const TERMS_URL = "https://app.tattletow.com/terms";
+const PRIVACY_URL = "https://app.tattletow.com/privacy";
 
 const DISCLAIMER =
   "TattleTow monitors parking complaints filed with the City of Milwaukee — not parking enforcement activity. A notification means a complaint has been filed near your registered zone. It does not mean a parking ticket has been issued, is being issued, or will be issued. TattleTow makes no guarantee that a complaint will result in enforcement action, nor that all complaints filed in your zone will be captured. Use of this service does not constitute legal advice. TattleTow is not affiliated with the City of Milwaukee or any municipal authority.";
@@ -57,6 +62,10 @@ export default function SignupScreen() {
     label: "",
     consentChecked: false,
     consentTimestamp: "",
+    // SMS opt-in (A2P 10DLC / TCPA). Separate from `consentChecked`, unchecked
+    // by default, and never a condition of finishing signup.
+    smsConsentChecked: false,
+    smsConsentTimestamp: "",
   });
 
   const registerMutation = trpc.auth.register.useMutation();
@@ -91,6 +100,13 @@ export default function SignupScreen() {
         setStep(5);
       } else if (step === 5) {
         if (!form.consentChecked) return setError("You must accept the disclaimer to continue.");
+        // SMS consent is optional, but consent without a number to text is not
+        // consent to anything — ask for the number instead of quietly storing
+        // an opt-in we can never act on.
+        if (form.smsConsentChecked && !form.phone.trim())
+          return setError(
+            "Enter your mobile number to receive text alerts, or uncheck the text-alerts box to continue without them."
+          );
 
         // Register last, then run the follow-up mutations on the session cookie
         // that register sets.
@@ -115,8 +131,13 @@ export default function SignupScreen() {
         }
 
         if (data?.user) await AsyncStorage.setItem("auth_user", JSON.stringify(data.user));
+        // The phone has to be on the account BEFORE the opt-in is recorded —
+        // the server refuses `smsConsent: true` for a user with no number.
         if (form.phone.trim()) await updateProfile.mutateAsync({ phone: form.phone.trim() });
-        await recordConsent.mutateAsync();
+        // Default scope ("signup") — this call is what stamps `consentGivenAt`
+        // for the disclaimer as well as `smsConsentAt` for the text opt-in.
+        // `false` is meaningful: it records an explicit decline.
+        await recordConsent.mutateAsync({ smsConsent: form.smsConsentChecked });
         await createZone.mutateAsync({
           street: form.street,
           centerAddress: Number(form.centerAddress),
@@ -141,8 +162,9 @@ export default function SignupScreen() {
           </IosAppIcon>
           <Text style={styles.successTitle}>You're all set!</Text>
           <Text style={styles.successBody}>
-            Your watch zone has been created. You'll receive SMS and email alerts whenever a
-            complaint is filed near{" "}
+            Your watch zone has been created. You'll receive{" "}
+            {form.smsConsentChecked ? "text, push, and email alerts" : "push and email alerts"}{" "}
+            whenever a complaint is filed near{" "}
             <Text style={{ color: colors.text, fontWeight: "700" }}>
               {form.centerAddress} {form.street}
             </Text>
@@ -309,7 +331,9 @@ export default function SignupScreen() {
             <View>
               <View style={styles.stepHeader}>
                 <Text style={styles.stepTitle}>Review & Consent</Text>
-                <Text style={styles.stepSubtitle}>Please read and accept the disclaimer.</Text>
+                <Text style={styles.stepSubtitle}>
+                  Accept the disclaimer, then choose whether you want text alerts.
+                </Text>
               </View>
               <IosCard style={{ marginHorizontal: 16, padding: 14, maxHeight: 180 }}>
                 <ScrollView>
@@ -341,6 +365,34 @@ export default function SignupScreen() {
                   </View>
                 </Pressable>
               </IosTable>
+
+              {/* The same opt-in block the web signup renders — phone field
+                  above the checkbox, all four disclosures beside it, never
+                  required. Copy is verbatim from the web component because the
+                  wording is filed in the Twilio A2P campaign. */}
+              <SmsConsentBlock
+                phone={form.phone}
+                onPhoneChange={(value) => updateForm("phone", value)}
+                checked={form.smsConsentChecked}
+                onCheckedChange={(next) => {
+                  updateForm("smsConsentChecked", next);
+                  updateForm("smsConsentTimestamp", next ? new Date().toISOString() : "");
+                }}
+                consentedAt={form.smsConsentTimestamp || undefined}
+              />
+
+              <Text style={styles.legalFooter}>
+                By continuing you agree to our{" "}
+                <Text style={styles.legalLink} onPress={() => Linking.openURL(TERMS_URL)}>
+                  Terms of Service
+                </Text>{" "}
+                and{" "}
+                <Text style={styles.legalLink} onPress={() => Linking.openURL(PRIVACY_URL)}>
+                  Privacy Policy
+                </Text>
+                . We never sell your number, and message consent is not required to subscribe.
+              </Text>
+
               <View style={styles.stepFooter}>
                 <IosButton variant="green" onPress={handleNext} loading={isBusy}>
                   Complete Sign Up →
@@ -381,6 +433,8 @@ const styles = StyleSheet.create({
   rowValue: { fontSize: 17, color: colors.textLight, fontFamily },
   inlineLabel: { fontSize: 17, color: colors.text, minWidth: 90, fontFamily },
   disclaimer: { fontSize: 12, color: colors.textLight, lineHeight: 18, fontFamily },
+  legalFooter: { fontSize: 12, color: colors.textLight, lineHeight: 18, paddingHorizontal: 16, paddingTop: 12, fontFamily },
+  legalLink: { color: colors.blue },
   consentRow: { flexDirection: "row", alignItems: "flex-start", paddingHorizontal: 16, paddingVertical: 12, gap: 12 },
   checkbox: {
     width: 22, height: 22, borderRadius: 6, flexShrink: 0,

@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
-import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, StyleSheet } from "react-native";
+import { View, Text, ScrollView, Pressable, Switch, Alert, ActivityIndicator, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Linking from "expo-linking";
-import { CreditCard, ExternalLink, MapPin, ChevronRight, Gift, Shield } from "lucide-react-native";
+import { CreditCard, ExternalLink, MapPin, MessageSquare, ChevronRight, Gift, Shield } from "lucide-react-native";
 import { trpc } from "@/lib/trpc";
 import { colors, gradients, fontFamily, cardShadow } from "@/lib/ios6-theme";
 import { formatPhoneDisplay } from "@/lib/format";
@@ -24,8 +24,13 @@ interface User {
   email: string;
   role: string;
   phone?: string | null;
+  /** Non-null = express consent to SMS on file. The one thing every SMS send is gated on. */
+  smsConsentAt?: string | null;
   subscriptionStatus: string;
 }
+
+/** The public program-details page the A2P campaign points at. */
+const SMS_PROGRAM_URL = "https://app.tattletow.com/sms-alerts";
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -50,6 +55,36 @@ export default function SettingsScreen() {
     onSuccess: () => meQuery.refetch(),
     onError: (err: any) => Alert.alert("Error", err.message || "Could not update profile."),
   });
+
+  /**
+   * Text alerts (A2P 10DLC / TCPA). The signup opt-in is the record of consent;
+   * this switch is the record of withdrawal. Turning it off writes NULL to
+   * `smsConsentAt`, which is the single flag every server-side SMS send is
+   * gated on — so this switch is the whole story, and email and push are
+   * unaffected either way.
+   *
+   * `scope: "sms"` matters: without it the server would also re-stamp
+   * `consentGivenAt`, overwriting the date the user acknowledged the service
+   * disclaimer at signup.
+   */
+  const recordConsent = trpc.auth.recordConsent.useMutation({
+    onSuccess: () => meQuery.refetch(),
+    onError: (err: any) =>
+      Alert.alert("Error", err?.message || "Could not update your text-alert preference."),
+  });
+
+  const handleSmsToggle = (next: boolean) => {
+    // Consent to text a number we do not have is not consent to anything. The
+    // server refuses this too; catching it here gives a better message.
+    if (next && !user?.phone?.trim()) {
+      Alert.alert(
+        "Add a mobile number",
+        "Add your mobile number above before turning text alerts on."
+      );
+      return;
+    }
+    recordConsent.mutate({ smsConsent: next, scope: "sms" });
+  };
 
   const logoutMutation = trpc.auth.logout.useMutation();
 
@@ -200,6 +235,54 @@ export default function SettingsScreen() {
                 }}
               />
             </IosShadowField>
+          </View>
+        </View>
+
+        {/* Text Alerts (SMS consent) */}
+        <View style={{ marginBottom: 24 }}>
+          <IosSectionLabel>Text Alerts</IosSectionLabel>
+          <View style={styles.wideCardColumn}>
+            <View style={styles.smsHeaderRow}>
+              <View style={styles.wideCardIcon}>
+                <IosIconCell gradient={gradients.iconGreen}>
+                  <MessageSquare size={18} color="#fff" />
+                </IosIconCell>
+              </View>
+              <View style={styles.wideCardBody}>
+                <Text style={styles.wideCardTitle}>Text me parking-complaint alerts</Text>
+                <Text style={styles.wideCardSubtitle}>
+                  {user.smsConsentAt
+                    ? `Opted in ${new Date(user.smsConsentAt).toLocaleString()}${
+                        user.phone ? ` · ${formatPhoneDisplay(user.phone)}` : ""
+                      }`
+                    : `Off — you'll still get email and push alerts.${
+                        user.phone ? "" : " Add a phone number above to turn this on."
+                      }`}
+                </Text>
+              </View>
+              <View style={styles.wideCardTrailing}>
+                {recordConsent.isPending ? (
+                  <ActivityIndicator color={colors.blue} />
+                ) : (
+                  <Switch
+                    value={!!user.smsConsentAt}
+                    onValueChange={handleSmsToggle}
+                    trackColor={{ false: "#78788033", true: colors.green }}
+                  />
+                )}
+              </View>
+            </View>
+            <Text style={styles.smsDisclosure}>
+              Message frequency varies — typically 0–5 messages per week. Message and data rates may
+              apply. Reply STOP to unsubscribe, HELP for help. Text alerts are optional and are
+              never required to use TattleTow.
+            </Text>
+            <Text
+              style={styles.smsLink}
+              onPress={() => Linking.openURL(SMS_PROGRAM_URL).catch(() => {})}
+            >
+              About TattleTow text alerts
+            </Text>
           </View>
         </View>
 
@@ -384,6 +467,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     ...cardShadow,
   },
+  wideCardColumn: {
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.separator,
+    paddingVertical: 18,
+    paddingHorizontal: 18,
+    ...cardShadow,
+  },
+  smsHeaderRow: { flexDirection: "row", alignItems: "center" },
+  smsDisclosure: { fontSize: 12, color: colors.textLight, fontFamily, lineHeight: 18, marginTop: 10 },
+  smsLink: { fontSize: 12, color: colors.blue, fontFamily, marginTop: 8 },
   wideCardIcon: { marginRight: 16 },
   wideCardBody: { flex: 1, justifyContent: "center", gap: 3 },
   wideCardTitle: { fontSize: 16, fontWeight: "700", color: colors.text, fontFamily },

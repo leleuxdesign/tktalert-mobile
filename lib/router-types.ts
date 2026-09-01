@@ -18,6 +18,8 @@ const passthrough = (input: unknown) => input as any;
 const appRouter = t.router({
   auth: t.router({
     me: t.procedure.query((): any => ({})),
+    // { email, password, name?, phone?, city?, smsConsent? } — `smsConsent`
+    // is refused server-side unless `phone` comes with it.
     register: t.procedure.input(passthrough).mutation((): any => ({})),
     login: t.procedure.input(passthrough).mutation((): any => ({})),
     logout: t.procedure.mutation((): any => ({})),
@@ -26,7 +28,11 @@ const appRouter = t.router({
     updateProfile: t.procedure.input(passthrough).mutation((): any => ({})),
     changePassword: t.procedure.input(passthrough).mutation((): any => ({})),
     savePushToken: t.procedure.input(passthrough).mutation((): any => ({})),
-    recordConsent: t.procedure.mutation((): any => ({})),
+    // Input shape (tktalert-app/server/routers.ts, auth.recordConsent):
+    //   { smsConsent?: boolean; scope?: "signup" | "sms" } | undefined
+    // `scope: "sms"` updates only `smsConsentAt`; the default also stamps
+    // `consentGivenAt`, which must not be re-stamped by a Settings toggle.
+    recordConsent: t.procedure.input(passthrough).mutation((): any => ({})),
     deleteAccount: t.procedure.input(passthrough).mutation((): any => ({})),
   }),
   zones: t.router({
