@@ -132,7 +132,7 @@ export default function WatchZonesScreen() {
           </IosCard>
         )}
 
-        {zones.length < 2 && !showAddZone && (
+        {!showAddZone && (
           <View style={{ marginTop: 16 }}>
             <IosButton variant="silver" onPress={() => setShowAddZone(true)}>
               + Add Watch Zone

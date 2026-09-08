@@ -299,7 +299,9 @@ export default function SettingsScreen() {
                 </View>
                 <View style={styles.wideCardBody}>
                   <Text style={styles.wideCardTitle}>Manage Zones</Text>
-                  <Text style={styles.wideCardSubtitle}>{zoneCount} of 2 watch zones active</Text>
+                  <Text style={styles.wideCardSubtitle}>
+                    {zoneCount === 1 ? "1 watch zone active" : `${zoneCount} watch zones active`}
+                  </Text>
                 </View>
                 <View style={styles.wideCardTrailing}>
                   <ChevronRight size={20} color={colors.silver} />
