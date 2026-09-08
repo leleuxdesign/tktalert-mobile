@@ -1,8 +1,10 @@
 {
   "name": "tktalert-mobile",
   "version": "1.0.0",
+  "private": true,
   "description": "TKTAlert — Parking Ticket Alerts",
   "main": "expo-router/entry",
+  "packageManager": "npm@11.18.0",
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
