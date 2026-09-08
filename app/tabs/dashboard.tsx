@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { describeSubscription } from "../../lib/subscription";
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, StyleSheet, Pressable, Alert, Linking } from "react-native";
 import { useRouter, Link } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -111,8 +112,11 @@ export default function DashboardScreen() {
   // their zones, alert history, and settings — only notifications stop. Blocking
   // the whole dashboard hid the very thing they need to see: that their data is
   // intact and what to do about it.
-  const isPaused =
-    user.subscriptionStatus === "lapsed" || (user.subscriptionStatus as string) === "cancelled";
+  // Derived from the shared helper so Settings and the Dashboard cannot drift
+  // into describing one state two different ways, which is what happened when
+  // each screen mapped the enum for itself.
+  const plan = describeSubscription(user);
+  const isPaused = plan.paused;
 
   const graceEndMs = user.graceUntil ? new Date(user.graceUntil).getTime() : NaN;
   const graceDaysLeft =
@@ -123,9 +127,8 @@ export default function DashboardScreen() {
   const zones = zonesQuery.data ?? [];
   const alerts = alertsQuery.data ?? [];
 
-  const isActiveStatus =
-    user.subscriptionStatus === "active" || user.subscriptionStatus === "comped";
-  const statusLabel = isActiveStatus ? "Active" : isPaused ? "Paused" : "Inactive";
+  const isActiveStatus = plan.entitled;
+  const statusLabel = plan.badge;
   const statusColor = isActiveStatus ? colors.green : colors.red;
 
   return (
@@ -138,14 +141,34 @@ export default function DashboardScreen() {
         {isPaused && (
           <View style={styles.bannerWrap}>
             <View style={styles.pausedBanner}>
-              <Text style={styles.pausedTitle}>⏸ Alerts paused</Text>
+              <Text style={styles.pausedTitle}>
+                {plan.neverSubscribed ? "🔔 Alerts are off" : "⏸ Alerts paused"}
+              </Text>
+              {/*
+                A user who has never subscribed must not be told their
+                subscription "ended" — it is false, and it is the first thing a
+                new account sees. `subscribedAt` is null until Stripe reports a
+                completed checkout, which is what separates the two cases.
+              */}
               <Text style={styles.pausedBody}>
-                Your subscription ended, so we've stopped sending alerts. Nothing has been
-                deleted —{" "}
-                {zones.length > 0
-                  ? `your ${zones.length} watch zone${zones.length !== 1 ? "s are" : " is"} saved and `
-                  : "your account and history are intact and "}
-                alerts resume automatically the moment you renew.
+                {plan.neverSubscribed ? (
+                  <>
+                    Alerts only run on a paid subscription.{" "}
+                    {zones.length > 0
+                      ? `Your ${zones.length} watch zone${zones.length !== 1 ? "s are" : " is"} saved — we'll start watching `
+                      : "Add a watch zone and we'll start watching "}
+                    the moment you subscribe.
+                  </>
+                ) : (
+                  <>
+                    Your subscription ended, so we've stopped sending alerts. Nothing has
+                    been deleted —{" "}
+                    {zones.length > 0
+                      ? `your ${zones.length} watch zone${zones.length !== 1 ? "s are" : " is"} saved and `
+                      : "your account and history are intact and "}
+                    alerts resume automatically the moment you renew.
+                  </>
+                )}
               </Text>
               {/*
                 Points at the web app's real checkout. Revisit before the iOS
@@ -157,7 +180,7 @@ export default function DashboardScreen() {
                 style={styles.pausedLink}
                 onPress={() => Linking.openURL("https://app.tattletow.com/subscribe")}
               >
-                Renew my subscription →
+                {plan.neverSubscribed ? "Subscribe →" : "Renew my subscription →"}
               </Text>
             </View>
           </View>

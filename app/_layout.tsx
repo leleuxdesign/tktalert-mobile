@@ -33,7 +33,11 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     const inAuthGroup = segments[0] === "auth";
 
     if (!isAuthenticated && !inAuthGroup) {
-      router.replace("/auth/login");
+      // Welcome, not login. Dropping a first-time installer onto a bare
+      // credential form gave them nothing to decide with — no statement of what
+      // the app does and no mention that coverage is Milwaukee-only. Anyone
+      // returning can reach Sign In from there in one tap.
+      router.replace("/auth/welcome");
     } else if (isAuthenticated && inAuthGroup) {
       router.replace("/tabs/dashboard");
     }

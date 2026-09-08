@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
+import { describeSubscription } from "../../lib/subscription";
 import { View, Text, ScrollView, Pressable, Switch, Alert, ActivityIndicator, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Linking from "expo-linking";
-import { CreditCard, ExternalLink, MapPin, MessageSquare, ChevronRight, Gift, Shield } from "lucide-react-native";
+import { CreditCard, ExternalLink, MapPin, MessageSquare, ChevronRight, Shield } from "lucide-react-native";
 import { trpc } from "@/lib/trpc";
 import { colors, gradients, fontFamily, cardShadow } from "@/lib/ios6-theme";
 import { formatPhoneDisplay } from "@/lib/format";
@@ -195,6 +196,7 @@ export default function SettingsScreen() {
   }
 
   const zoneCount = zonesQuery.data?.length ?? 0;
+  const plan = describeSubscription(user);
 
   // Stripe-billed users only (active or lapsed). Comped accounts have no
   // Stripe customer, so a billing-portal session cannot be created for them.
@@ -323,23 +325,18 @@ export default function SettingsScreen() {
               </View>
               <View style={styles.wideCardBody}>
                 <Text style={styles.wideCardTitle}>Current Plan</Text>
-                <Text style={styles.wideCardSubtitle}>
-                  {user.subscriptionStatus === "comped"
-                    ? "Comped (Free)"
-                    : user.subscriptionStatus === "active"
-                    ? "Active Subscription"
-                    : "Lapsed"}
-                </Text>
+                <Text style={styles.wideCardSubtitle}>{plan.planLabel}</Text>
               </View>
               <View style={styles.wideCardTrailing}>
+                {/*
+                  Never render `subscriptionStatus` directly. It is a database
+                  enum, it has contained values the UI does not honour (the
+                  retired "trial"), and it disagreed with the label beside it.
+                */}
                 <IosBadge
-                  gradient={
-                    user.subscriptionStatus === "active" || user.subscriptionStatus === "comped"
-                      ? gradients.badgeGreen
-                      : gradients.badgeRed
-                  }
+                  gradient={plan.entitled ? gradients.badgeGreen : gradients.badgeRed}
                 >
-                  {user.subscriptionStatus}
+                  {plan.badge}
                 </IosBadge>
               </View>
             </View>
@@ -406,17 +403,6 @@ export default function SettingsScreen() {
         <View>
           <IosSectionLabel>Account Actions</IosSectionLabel>
           <View style={{ gap: 10 }}>
-            <View>
-              <IosButton variant="silver" disabled onPress={() => {}}>
-                <View style={styles.referBtnContent}>
-                  <Gift size={16} color={colors.textLight} />
-                  <Text style={styles.referBtnText}>Refer a Friend</Text>
-                </View>
-              </IosButton>
-              <Text style={styles.comingSoonText}>
-                Coming soon — give a free month, get a free month 🎉
-              </Text>
-            </View>
             <IosButton variant="red" onPress={handleLogout}>
               Sign Out
             </IosButton>
@@ -455,9 +441,6 @@ const styles = StyleSheet.create({
   dangerBody: { fontSize: 12, color: colors.textLight, fontFamily, lineHeight: 17, marginBottom: 10 },
   dangerAction: { fontSize: 14, fontWeight: "700", color: colors.red, fontFamily },
   center: { alignItems: "center", justifyContent: "center" },
-  referBtnContent: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
-  referBtnText: { fontSize: 17, fontWeight: "700", color: colors.textLight, fontFamily },
-  comingSoonText: { fontSize: 12, color: colors.textLight, fontFamily, textAlign: "center", marginTop: 6 },
   wideCard: {
     flexDirection: "row",
     alignItems: "center",

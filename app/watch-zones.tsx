@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { StreetPicker } from "@/components/StreetPicker";
 import { View, Text, ScrollView, Alert, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { Navigation } from "lucide-react-native";
@@ -168,12 +169,9 @@ export default function WatchZonesScreen() {
               </View>
               <View>
                 <Text style={styles.fieldLabel}>Street Name</Text>
-                <IosInput
-                  placeholder="e.g. N Milwaukee St"
+                <StreetPicker
                   value={newZone.street}
-                  onChangeText={(v) => setNewZone((z) => ({ ...z, street: v }))}
-                  textContentType="none"
-                  autoComplete="off"
+                  onChange={(street) => setNewZone((z) => ({ ...z, street }))}
                 />
               </View>
               <View>

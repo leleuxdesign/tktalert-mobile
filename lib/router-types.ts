@@ -35,6 +35,12 @@ const appRouter = t.router({
     recordConsent: t.procedure.input(passthrough).mutation((): any => ({})),
     deleteAccount: t.procedure.input(passthrough).mutation((): any => ({})),
   }),
+  streets: t.router({
+    // Typeahead over the City of Milwaukee's official street list, so a watch
+    // zone can be chosen rather than typed. Exact-match zone matching means a
+    // typo produces a zone that silently never fires.
+    search: t.procedure.input(passthrough).query((): any[] => []),
+  }),
   zones: t.router({
     list: t.procedure.query((): any[] => []),
     create: t.procedure.input(passthrough).mutation((): any => ({})),
