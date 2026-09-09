@@ -157,7 +157,7 @@ export default function WatchZonesScreen() {
 
             <View style={{ gap: 12 }}>
               <View>
-                <Text style={styles.fieldLabel}>House Number</Text>
+                <Text style={styles.fieldLabel}>Street Number</Text>
                 <IosInput
                   placeholder="e.g. 1234"
                   keyboardType="number-pad"
