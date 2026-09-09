@@ -67,9 +67,20 @@ export default function AlertsScreen() {
                   <Bell size={16} color="#fff" />
                 </IosIconCell>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.rowTitle}>Alert via {String(alert.channel).toUpperCase()}</Text>
+                  {/* Lead with the address. This row used to read
+                      "Complaint #11134591 · Zone #12" while the SMS and email
+                      for the same event both named the street — so the history
+                      was the least useful of the three channels, and someone
+                      opening the app after a text could not tell which alert
+                      was which. Falls back to the old id line only when the
+                      complaint record is missing. */}
+                  <Text style={styles.rowTitle}>
+                    {alert.address ?? `Complaint #${alert.complaintId}`}
+                  </Text>
                   <Text style={styles.rowSubtitle}>
-                    Complaint #{alert.complaintId} · Zone #{alert.zoneId}
+                    {alert.zoneLabel ?? alert.zoneStreet ?? `Zone #${alert.zoneId}`}
+                    {" · via "}
+                    {String(alert.channel).toUpperCase()}
                   </Text>
                   <Text style={styles.rowTimestamp}>{new Date(alert.sentAt).toLocaleString()}</Text>
                 </View>
