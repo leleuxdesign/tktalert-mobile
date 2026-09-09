@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { describeSubscription } from "../../lib/subscription";
-import { View, Text, ScrollView, Pressable, Switch, Alert, ActivityIndicator, StyleSheet } from "react-native";
+import { View, Text, ScrollView, Pressable, Switch, Alert, ActivityIndicator, StyleSheet, TextInput, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Linking from "expo-linking";
-import { CreditCard, ExternalLink, MapPin, MessageSquare, ChevronRight, Shield } from "lucide-react-native";
+import { CreditCard, ExternalLink, MapPin, MessageSquare, ChevronRight, Shield, Mail } from "lucide-react-native";
+import Constants from "expo-constants";
 import { trpc } from "@/lib/trpc";
 import { colors, gradients, fontFamily, cardShadow } from "@/lib/ios6-theme";
 import { formatPhoneDisplay } from "@/lib/format";
@@ -27,15 +28,23 @@ interface User {
   phone?: string | null;
   /** Non-null = express consent to SMS on file. The one thing every SMS send is gated on. */
   smsConsentAt?: string | null;
+  /** ALERT emails only — account mail ignores this. Absent/null reads as on. */
+  emailAlertsEnabled?: boolean | null;
+  isComped?: boolean | null;
   subscriptionStatus: string;
 }
 
 /** The public program-details page the A2P campaign points at. */
 const SMS_PROGRAM_URL = "https://app.tattletow.com/sms-alerts";
 
+/** Sent with feedback so a report carries its own build context. */
+const APP_VERSION = String(Constants.expoConfig?.version ?? "unknown");
+
 export default function SettingsScreen() {
   const router = useRouter();
   const [cachedUser, setCachedUser] = useState<User | null>(null);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackBody, setFeedbackBody] = useState("");
 
   useEffect(() => {
     AsyncStorage.getItem("auth_user").then((stored) => {
@@ -68,6 +77,20 @@ export default function SettingsScreen() {
    * `consentGivenAt`, overwriting the date the user acknowledged the service
    * disclaimer at signup.
    */
+  const setEmailAlerts = trpc.auth.setEmailAlerts.useMutation({
+    onSuccess: () => meQuery.refetch(),
+    onError: (e: any) => Alert.alert("Couldn't save", e.message),
+  });
+
+  const submitFeedback = trpc.feedback.submit.useMutation({
+    onSuccess: () => {
+      setFeedbackBody("");
+      setFeedbackOpen(false);
+      Alert.alert("Sent", "Thank you — we read every one of these.");
+    },
+    onError: (e: any) => Alert.alert("Couldn't send", e.message),
+  });
+
   const recordConsent = trpc.auth.recordConsent.useMutation({
     onSuccess: () => meQuery.refetch(),
     onError: (err: any) =>
@@ -288,6 +311,136 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        {/* Email Alerts — ALERTS ONLY.
+            Turning this off must never touch account mail. Password resets,
+            receipts and dunning go through a different server path that does
+            not read this flag, and the copy says so, because a user who mutes
+            alert volume still has to be able to get back into their account. */}
+        <View style={{ marginBottom: 24 }}>
+          <IosSectionLabel>Email Alerts</IosSectionLabel>
+          <View style={styles.wideCardColumn}>
+            <View style={styles.smsHeaderRow}>
+              <View style={styles.wideCardIcon}>
+                <IosIconCell gradient={gradients.iconBlue}>
+                  <Mail size={18} color="#fff" />
+                </IosIconCell>
+              </View>
+              <View style={styles.wideCardBody}>
+                <Text style={styles.wideCardTitle}>Email me parking-complaint alerts</Text>
+                <Text style={styles.wideCardSubtitle}>
+                  {user.emailAlertsEnabled === false
+                    ? "Off — you'll still get push alerts."
+                    : `On — sent to ${user.email}`}
+                </Text>
+              </View>
+              <View style={styles.wideCardTrailing}>
+                {setEmailAlerts.isPending ? (
+                  <ActivityIndicator color={colors.blue} />
+                ) : (
+                  <Switch
+                    value={user.emailAlertsEnabled !== false}
+                    onValueChange={(v) => setEmailAlerts.mutate({ enabled: v })}
+                    trackColor={{ false: "#78788033", true: colors.green }}
+                  />
+                )}
+              </View>
+            </View>
+            <Text style={styles.smsDisclosure}>
+              This turns off alert emails only. You'll still receive account email — password
+              resets, receipts and billing notices — because those keep your account working.
+            </Text>
+          </View>
+        </View>
+
+        {/* No-channel warning. A paying user with text and email off and push
+            denied receives nothing at all while being charged, concludes the
+            product is broken, and is right. Warn rather than block — they may
+            be part-way through setting things up. */}
+        {!user.smsConsentAt && user.emailAlertsEnabled === false && (
+          <View style={[styles.wideCardColumn, { marginBottom: 24, borderLeftWidth: 4, borderLeftColor: colors.orange }]}>
+            <Text style={[styles.wideCardTitle, { color: colors.orange }]}>
+              You have no way to receive alerts
+            </Text>
+            <Text style={styles.smsDisclosure}>
+              Text and email alerts are both off. Push notifications are the only channel left —
+              if those are denied in your phone's settings, nothing will reach you.
+            </Text>
+          </View>
+        )}
+
+        {/* Feedback — the medium that makes a comped tester's access
+            conditional rather than a gift. One-way for now; the v1.5 support
+            chat supersedes it and can adopt these rows. */}
+        <View style={{ marginBottom: 24 }}>
+          <IosSectionLabel>Feedback</IosSectionLabel>
+          <View style={styles.wideCardColumn}>
+            {!feedbackOpen ? (
+              <Pressable onPress={() => setFeedbackOpen(true)}>
+                {({ pressed }) => (
+                  <View style={[styles.smsHeaderRow, pressed && { opacity: 0.85 }]}>
+                    <View style={styles.wideCardIcon}>
+                      <IosIconCell gradient={gradients.iconPurple}>
+                        <MessageSquare size={18} color="#fff" />
+                      </IosIconCell>
+                    </View>
+                    <View style={styles.wideCardBody}>
+                      <Text style={styles.wideCardTitle}>Send feedback</Text>
+                      <Text style={styles.wideCardSubtitle}>
+                        {user.isComped
+                          ? "Your account is comped — tell us what's working and what isn't."
+                          : "Bugs, ideas, or anything that feels off."}
+                      </Text>
+                    </View>
+                    <View style={styles.wideCardTrailing}>
+                      <ChevronRight size={20} color={colors.silver} />
+                    </View>
+                  </View>
+                )}
+              </Pressable>
+            ) : (
+              <View style={{ gap: 10 }}>
+                <TextInput
+                  style={styles.feedbackInput}
+                  multiline
+                  numberOfLines={5}
+                  placeholder="What happened, or what would you like to see?"
+                  placeholderTextColor={colors.textLight}
+                  value={feedbackBody}
+                  onChangeText={setFeedbackBody}
+                  textAlignVertical="top"
+                />
+                <View style={{ flexDirection: "row", gap: 10 }}>
+                  <IosButton
+                    variant="silver"
+                    flex={1}
+                    onPress={() => {
+                      setFeedbackOpen(false);
+                      setFeedbackBody("");
+                    }}
+                  >
+                    Cancel
+                  </IosButton>
+                  <IosButton
+                    variant="blue"
+                    flex={2}
+                    loading={submitFeedback.isPending}
+                    onPress={() =>
+                      submitFeedback.mutate({
+                        kind: "general",
+                        body: feedbackBody.trim(),
+                        platform: Platform.OS,
+                        appVersion: APP_VERSION,
+                      })
+                    }
+                  >
+                    Send
+                  </IosButton>
+                </View>
+              </View>
+            )}
+          </View>
+        </View>
+
         {/* Watch Zones */}
         <View style={{ marginBottom: 24 }}>
           <IosSectionLabel>Watch Zones</IosSectionLabel>
@@ -468,5 +621,16 @@ const styles = StyleSheet.create({
   wideCardBody: { flex: 1, justifyContent: "center", gap: 3 },
   wideCardTitle: { fontSize: 16, fontWeight: "700", color: colors.text, fontFamily },
   wideCardSubtitle: { fontSize: 13, color: colors.textLight, fontFamily },
+  feedbackInput: {
+    minHeight: 110,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(0,0,0,0.18)",
+    borderRadius: 10,
+    backgroundColor: "#fff",
+    padding: 12,
+    fontSize: 15,
+    color: colors.text,
+    fontFamily,
+  },
   wideCardTrailing: { marginLeft: 16, alignItems: "flex-end", justifyContent: "center" },
 });

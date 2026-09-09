@@ -33,7 +33,16 @@ const appRouter = t.router({
     // `scope: "sms"` updates only `smsConsentAt`; the default also stamps
     // `consentGivenAt`, which must not be re-stamped by a Settings toggle.
     recordConsent: t.procedure.input(passthrough).mutation((): any => ({})),
+    // ALERT email only. Account mail - password reset, receipts, dunning - and
+    // the future marketing drip are separate server paths and never read this.
+    setEmailAlerts: t.procedure.input(passthrough).mutation((): any => ({})),
     deleteAccount: t.procedure.input(passthrough).mutation((): any => ({})),
+  }),
+  feedback: t.router({
+    // The medium that makes a comped tester's access conditional. One-way for
+    // now; the v1.5 support chat supersedes it.
+    submit: t.procedure.input(passthrough).mutation((): any => ({})),
+    mine: t.procedure.query((): any => ({ count: 0 })),
   }),
   streets: t.router({
     // Typeahead over the City of Milwaukee's official street list, so a watch
