@@ -77,10 +77,16 @@ export default function AlertsScreen() {
                   <Text style={styles.rowTitle}>
                     {alert.address ?? `Complaint #${alert.complaintId}`}
                   </Text>
+                  {/* One complaint is one alert. It may have arrived by SMS
+                      *and* email, which is a property of the alert, not two
+                      alerts — listing them separately double-counted the badge
+                      and repeated the same address in the history. */}
                   <Text style={styles.rowSubtitle}>
                     {alert.zoneLabel ?? alert.zoneStreet ?? `Zone #${alert.zoneId}`}
                     {" · via "}
-                    {String(alert.channel).toUpperCase()}
+                    {(alert.channels?.length ? alert.channels : [alert.channel])
+                      .map((c: string) => String(c).toUpperCase())
+                      .join(" + ")}
                   </Text>
                   <Text style={styles.rowTimestamp}>{new Date(alert.sentAt).toLocaleString()}</Text>
                 </View>
@@ -93,7 +99,12 @@ export default function AlertsScreen() {
                   {alert.readAt ? (
                     <Text style={styles.clearedLabel}>Cleared</Text>
                   ) : (
-                    <Pressable onPress={() => markRead.mutate({ alertId: alert.id })} hitSlop={6}>
+                    <Pressable
+                      onPress={() =>
+                        markRead.mutate({ alertIds: alert.alertIds ?? [alert.id] })
+                      }
+                      hitSlop={6}
+                    >
                       <Text style={styles.markReadLink}>Mark Read</Text>
                     </Pressable>
                   )}

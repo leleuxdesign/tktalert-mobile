@@ -32,11 +32,12 @@ export function StreetPicker({
     { enabled: value.trim().length >= 2, staleTime: 60_000 }
   );
 
-  const list: { label: string; addressMin: number; addressMax: number }[] =
+  const list: { label: string; addressMin: number; addressMax: number; exact?: boolean }[] =
     matches ?? [];
-  const exact = list.some(
-    (m) => m.label.toLowerCase() === value.trim().toLowerCase()
-  );
+  // Server-decided, using the same normalizeStreet the scanner matches on.
+  // A raw compare warned about "West Pierce Street" — valid, just spelled out
+  // where the city list abbreviates.
+  const exact = list.some((m: any) => m.exact);
   const showList = focused && list.length > 0 && !exact;
   const showWarning =
     touched && !focused && value.trim().length >= 2 && !exact && matches !== undefined;

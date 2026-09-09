@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { StreetPicker } from "@/components/StreetPicker";
 import {
   View,
   Text,
@@ -279,7 +280,14 @@ export default function SignupScreen() {
               </View>
               <IosFormCard>
                 <IosFormRow>
-                  <FormLabelInput label="Street" placeholder="e.g. N Water St" value={form.street} onChangeText={(v) => updateForm("street", v)} />
+                  {/* The wizard creates the FIRST zone, for someone who has
+                      never used the app — the likeliest place for a street typo
+                      and, until now, the one place with no validation. A tester
+                      entered "Watered Street" and got no feedback at all. */}
+                  <View style={{ paddingHorizontal: 12, paddingVertical: 8 }}>
+                    <Text style={styles.inlineLabel}>Street</Text>
+                    <StreetPicker value={form.street} onChange={(v) => updateForm("street", v)} />
+                  </View>
                 </IosFormRow>
                 <IosFormRow>
                   <FormLabelInput label="House #" placeholder="e.g. 1234" value={form.centerAddress} onChangeText={(v) => updateForm("centerAddress", v)} keyboardType="number-pad" />
