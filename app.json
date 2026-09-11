@@ -18,7 +18,7 @@
       "bundleIdentifier": "net.tattletow.app",
       "buildNumber": "1",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "TattleTow uses your location to monitor parking complaints near your registered address.",
+        "NSLocationWhenInUseUsageDescription": "TattleTow uses your location only to centre the map when you add a watch zone, so you can find your address quickly. Alerts are based on the address you choose, not on where your phone is.",
         "UIBackgroundModes": [
           "remote-notification"
         ]
@@ -80,6 +80,14 @@
         "projectId": "016ef01c-1621-4ca4-b943-14ad9408a821"
       }
     },
-    "owner": "el-johnsdotter-lc"
+    "owner": "el-johnsdotter-lc",
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 3000
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
   }
 }

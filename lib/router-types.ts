@@ -38,6 +38,14 @@ const appRouter = t.router({
     setEmailAlerts: t.procedure.input(passthrough).mutation((): any => ({})),
     deleteAccount: t.procedure.input(passthrough).mutation((): any => ({})),
   }),
+  support: t.router({
+    // One-to-one conversation with the Owner.
+    myThread: t.procedure.query((): any => ({ messages: [], unread: 0 })),
+    send: t.procedure.input(passthrough).mutation((): any => ({})),
+    markRead: t.procedure.mutation((): any => ({})),
+    // Diagnostic snapshot only - no location, contacts or ad identifiers.
+    reportDevice: t.procedure.input(passthrough).mutation((): any => ({})),
+  }),
   feedback: t.router({
     // The medium that makes a comped tester's access conditional. One-way for
     // now; the v1.5 support chat supersedes it.

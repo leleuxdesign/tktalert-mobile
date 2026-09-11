@@ -220,6 +220,8 @@ export default function SettingsScreen() {
 
   const zoneCount = zonesQuery.data?.length ?? 0;
   const plan = describeSubscription(user);
+  const supportThread = trpc.support.myThread.useQuery(undefined, { refetchInterval: 60_000 });
+  const supportUnread = (supportThread.data as any)?.unread ?? 0;
 
   // Stripe-billed users only (active or lapsed). Comped accounts have no
   // Stripe customer, so a billing-portal session cannot be created for them.
@@ -367,6 +369,42 @@ export default function SettingsScreen() {
             </Text>
           </View>
         )}
+
+        {/* Support — one-to-one with the Owner. Placed above Feedback because a
+            conversation is the better channel when someone has a problem; the
+            one-way form remains for people who just want to leave an idea. */}
+        <View style={{ marginBottom: 24 }}>
+          <IosSectionLabel>Support</IosSectionLabel>
+          <View style={styles.wideCardColumn}>
+            <Pressable onPress={() => router.push("/support")}>
+              {({ pressed }) => (
+                <View style={[styles.smsHeaderRow, pressed && { opacity: 0.85 }]}>
+                  <View style={styles.wideCardIcon}>
+                    <IosIconCell gradient={gradients.iconBlue}>
+                      <MessageSquare size={18} color="#fff" />
+                    </IosIconCell>
+                  </View>
+                  <View style={styles.wideCardBody}>
+                    <Text style={styles.wideCardTitle}>Message us</Text>
+                    <Text style={styles.wideCardSubtitle}>
+                      {supportUnread > 0
+                        ? `${supportUnread} new repl${supportUnread === 1 ? "y" : "ies"}`
+                        : "Talk directly to the person who builds TattleTow."}
+                    </Text>
+                  </View>
+                  <View style={styles.wideCardTrailing}>
+                    {supportUnread > 0 && (
+                      <View style={styles.unreadDot}>
+                        <Text style={styles.unreadDotText}>{supportUnread}</Text>
+                      </View>
+                    )}
+                    <ChevronRight size={20} color={colors.silver} />
+                  </View>
+                </View>
+              )}
+            </Pressable>
+          </View>
+        </View>
 
         {/* Feedback — the medium that makes a comped tester's access
             conditional rather than a gift. One-way for now; the v1.5 support
@@ -632,5 +670,10 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontFamily,
   },
+  unreadDot: {
+    minWidth: 20, height: 20, borderRadius: 10, backgroundColor: colors.red,
+    alignItems: "center", justifyContent: "center", paddingHorizontal: 5, marginRight: 6,
+  },
+  unreadDotText: { color: "#fff", fontSize: 11, fontWeight: "700", fontFamily },
   wideCardTrailing: { marginLeft: 16, alignItems: "flex-end", justifyContent: "center" },
 });
