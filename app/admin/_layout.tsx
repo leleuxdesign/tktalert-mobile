@@ -3,7 +3,7 @@ import { Tabs, useRouter } from "expo-router";
 import { View, ActivityIndicator } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { BarChart2, Users, FileText, Bell, Activity } from "lucide-react-native";
+import { BarChart2, Users, FileText, Bell, Activity, MessageSquare } from "lucide-react-native";
 import { trpc } from "@/lib/trpc";
 import { colors, gradients } from "@/lib/ios6-theme";
 
@@ -54,6 +54,13 @@ export default function AdminLayout() {
       <Tabs.Screen
         name="index"
         options={{ title: "Overview", tabBarIcon: ({ focused }) => <TabIcon Icon={BarChart2} focused={focused} /> }}
+      />
+      {/* Support sits second, immediately after Overview: answering a customer
+          is the thing most likely to need doing, and burying it behind Users
+          would repeat the mistake of putting it on the web console only. */}
+      <Tabs.Screen
+        name="support"
+        options={{ title: "Support", tabBarIcon: ({ focused }) => <TabIcon Icon={MessageSquare} focused={focused} /> }}
       />
       <Tabs.Screen
         name="users"

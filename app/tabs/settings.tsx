@@ -410,7 +410,7 @@ export default function SettingsScreen() {
             conditional rather than a gift. One-way for now; the v1.5 support
             chat supersedes it and can adopt these rows. */}
         <View style={{ marginBottom: 24 }}>
-          <IosSectionLabel>Feedback</IosSectionLabel>
+          <IosSectionLabel>Quick Feedback</IosSectionLabel>
           <View style={styles.wideCardColumn}>
             {!feedbackOpen ? (
               <Pressable onPress={() => setFeedbackOpen(true)}>
@@ -422,11 +422,11 @@ export default function SettingsScreen() {
                       </IosIconCell>
                     </View>
                     <View style={styles.wideCardBody}>
-                      <Text style={styles.wideCardTitle}>Send feedback</Text>
+                      <Text style={styles.wideCardTitle}>Send feedback (one-way)</Text>
                       <Text style={styles.wideCardSubtitle}>
                         {user.isComped
-                          ? "Your account is comped — tell us what's working and what isn't."
-                          : "Bugs, ideas, or anything that feels off."}
+                          ? "Drop a note without starting a conversation. For a reply, use Message us above."
+                          : "Drop a note without starting a conversation. For a reply, use Message us above."}
                       </Text>
                     </View>
                     <View style={styles.wideCardTrailing}>

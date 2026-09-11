@@ -38,6 +38,14 @@ const appRouter = t.router({
     setEmailAlerts: t.procedure.input(passthrough).mutation((): any => ({})),
     deleteAccount: t.procedure.input(passthrough).mutation((): any => ({})),
   }),
+  adminSupport: t.router({
+    // Admin side of the two-way chat, so the Owner can answer from the phone
+    // instead of signing into a web console.
+    inbox: t.procedure.query((): any[] => []),
+    thread: t.procedure.input(passthrough).query((): any => ({ messages: [] })),
+    reply: t.procedure.input(passthrough).mutation((): any => ({})),
+    markRead: t.procedure.input(passthrough).mutation((): any => ({})),
+  }),
   support: t.router({
     // One-to-one conversation with the Owner.
     myThread: t.procedure.query((): any => ({ messages: [], unread: 0 })),

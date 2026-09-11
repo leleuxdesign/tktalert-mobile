@@ -1,6 +1,6 @@
 import { View, Text, ScrollView, StyleSheet, Alert } from "react-native";
 import { useRouter } from "expo-router";
-import { Users, Activity, Bell, FileText, Play } from "lucide-react-native";
+import { Users, Activity, Bell, FileText, Play, MessageSquare } from "lucide-react-native";
 import { trpc } from "@/lib/trpc";
 import { colors, gradients, fontFamily } from "@/lib/ios6-theme";
 import { IosPage, IosNavBar, IosCard, IosButton, IosSectionLabel } from "@/components/ios6";
