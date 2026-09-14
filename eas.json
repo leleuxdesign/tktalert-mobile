@@ -35,6 +35,10 @@
         "serviceAccountKeyPath": "./credentials/google-play-service-account.json",
         "track": "internal",
         "releaseStatus": "draft"
+      },
+      "ios": {
+        "appleTeamId": "6LV96N899W",
+        "appleId": "eljohnssson@gmail.com"
       }
     },
     "production": {
@@ -42,6 +46,10 @@
         "serviceAccountKeyPath": "./credentials/google-play-service-account.json",
         "track": "production",
         "releaseStatus": "draft"
+      },
+      "ios": {
+        "appleTeamId": "6LV96N899W",
+        "appleId": "eljohnssson@gmail.com"
       }
     }
   }
