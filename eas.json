@@ -50,7 +50,10 @@
       "ios": {
         "appleTeamId": "6LV96N899W",
         "appleId": "eljohnssson@gmail.com",
-        "ascAppId": "6811978677"
+        "ascAppId": "6811978677",
+        "ascApiKeyPath": "./credentials/AuthKey_Y62JULL8ML.p8",
+        "ascApiKeyId": "Y62JULL8ML",
+        "ascApiKeyIssuerId": "3b373798-b37c-4cc6-9207-e09e8773e72b"
       }
     }
   }
