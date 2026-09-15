@@ -1,0 +1,1 @@
+- **Android vc10 RELEASED to Play internal testing 2026-09-14** (Owner confirmed). Next: Owner + developer install; TestFlight internal testers for iOS build 1.
