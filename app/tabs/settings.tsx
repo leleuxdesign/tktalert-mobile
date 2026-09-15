@@ -533,7 +533,12 @@ export default function SettingsScreen() {
             </View>
             {hasStripeSubscription && (
               <Pressable
-                onPress={() => billingPortalMutation.mutate()}
+                onPress={() =>
+                  billingPortalMutation.mutate({
+                    // Stripe returns here, which points the customer back to the app.
+                    returnUrl: "https://app.tattletow.com/subscribed?source=app&portal=1",
+                  })
+                }
                 disabled={billingPortalMutation.isPending}
               >
                 {({ pressed }) => (

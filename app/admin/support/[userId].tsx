@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import {
-  View, Text, ScrollView, TextInput, StyleSheet, KeyboardAvoidingView, Platform,
+  View, Text, ScrollView, TextInput, StyleSheet, KeyboardAvoidingView, Platform, Alert,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { trpc } from "@/lib/trpc";
@@ -34,6 +34,9 @@ export default function AdminSupportThread() {
       await utils.adminSupport.thread.invalidate();
       await utils.adminSupport.inbox.invalidate();
     },
+    // A failed send used to do nothing visible, which reads as "sent".
+    onError: (err: any) =>
+      Alert.alert("Reply not sent", err?.message || "Please check your connection and try again."),
   });
 
   // Opening the thread is what "reading" means.
@@ -88,7 +91,9 @@ export default function AdminSupportThread() {
           <IosButton
             variant="blue"
             loading={reply.isPending}
-            onPress={() => reply.mutate({ userId: id, body: draft.trim() })}
+            onPress={() => {
+              if (draft.trim()) reply.mutate({ userId: id, body: draft.trim() });
+            }}
           >
             Send Reply
           </IosButton>

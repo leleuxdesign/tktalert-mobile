@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { View, Text, KeyboardAvoidingView, Platform, ScrollView, StyleSheet } from "react-native";
-import { Link, useRouter } from "expo-router";
+import { Link, useRouter, useLocalSearchParams } from "expo-router";
 import { Bell } from "lucide-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { trpc } from "@/lib/trpc";
@@ -18,7 +18,10 @@ import {
 export default function LoginScreen() {
   const router = useRouter();
   const utils = trpc.useUtils();
-  const [email, setEmail] = useState("");
+  // "Open TattleTow to Sign In" links can carry the email so it isn't typed twice.
+  // Never a password: the phone's password manager fills that.
+  const params = useLocalSearchParams<{ email?: string }>();
+  const [email, setEmail] = useState(typeof params.email === "string" ? params.email : "");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 

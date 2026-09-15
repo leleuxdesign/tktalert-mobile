@@ -106,7 +106,7 @@ const appRouter = t.router({
   }),
   stripe: t.router({
     createCheckoutSession: t.procedure.input(passthrough).mutation((): any => ({})),
-    createBillingPortalSession: t.procedure.mutation((): { url: string } => ({ url: "" })),
+    createBillingPortalSession: t.procedure.input(passthrough).mutation((): { url: string } => ({ url: "" })),
   }),
 });
 

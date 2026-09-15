@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { describeSubscription } from "../../lib/subscription";
-import { View, Text, ScrollView, RefreshControl, ActivityIndicator, StyleSheet, Pressable, Alert, Linking } from "react-native";
+import { View, Text, ScrollView, RefreshControl, ActivityIndicator, StyleSheet, Pressable, Alert, Linking, AppState } from "react-native";
 import { useRouter, Link } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Bell, AlertCircle, ChevronRight, Car } from "lucide-react-native";
@@ -29,7 +29,9 @@ interface User {
   graceUntil?: string | null;
 }
 
-const RENEW_URL = "https://app.tattletow.com/subscribe";
+const APP_WEB_URL = "https://app.tattletow.com";
+/** Web checkout: only a fallback now, if the app cannot start its own. */
+const RENEW_URL = `${APP_WEB_URL}/subscribe`;
 /** Key for the once-per-day throttle on the grace prompt. */
 const GRACE_PROMPT_KEY = "grace_prompt_last_shown";
 
@@ -51,6 +53,34 @@ export default function DashboardScreen() {
 
   const meQuery = trpc.auth.me.useQuery();
   const user: User | null = meQuery.data ?? cachedUser;
+
+  // Checkout starts from the app's own session: the server creates the Stripe
+  // session for this signed-in account, so the customer is not sent to the web
+  // to sign in a second time. Stripe then returns them to /subscribed, which
+  // hands them back to the app instead of leaving them in the web dashboard.
+  const checkoutMutation = trpc.stripe.createCheckoutSession.useMutation({
+    onSuccess: async (data: any) => {
+      await Linking.openURL(data?.url || RENEW_URL);
+    },
+    // Fall back to web checkout rather than leaving the button dead.
+    onError: () => {
+      Linking.openURL(RENEW_URL);
+    },
+  });
+  const startCheckout = () =>
+    checkoutMutation.mutate({
+      successUrl: `${APP_WEB_URL}/subscribed?source=app`,
+      cancelUrl: `${APP_WEB_URL}/subscribed?source=app&cancelled=1`,
+    });
+
+  // Returning from Stripe in the browser: refresh so a new subscription shows
+  // as active without the customer needing to know to pull down.
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") meQuery.refetch();
+    });
+    return () => subscription.remove();
+  }, []);
 
   // Daily renewal prompt while a failed payment is in its grace window.
   // The server sends push/email/SMS on the same 24h cadence; this covers the
@@ -78,7 +108,7 @@ export default function DashboardScreen() {
           `Nothing will be deleted — your watch zones stay exactly as they are.`,
         [
           { text: "Later", style: "cancel" },
-          { text: "Renew Now", onPress: () => Linking.openURL(RENEW_URL) },
+          { text: "Renew Now", onPress: startCheckout },
         ]
       );
     });
@@ -171,16 +201,18 @@ export default function DashboardScreen() {
                 )}
               </Text>
               {/*
-                Points at the web app's real checkout. Revisit before the iOS
-                submission in v1.5 — App Store rules on external purchase links
-                are stricter than Play's, and Session 1 deliberately stripped
-                purchase UI from the app for exactly that reason.
+                Owner ruling 2026-09-14: Stripe, not in-app purchase, for the US
+                launch. Both stores now let US apps link out to external payment
+                (Apple's commission on those sales is still being litigated;
+                Google's US external-links program reports fees from 2026-10-01).
               */}
               <Text
                 style={styles.pausedLink}
-                onPress={() => Linking.openURL("https://app.tattletow.com/subscribe")}
+                onPress={startCheckout}
               >
-                {plan.neverSubscribed ? "Subscribe →" : "Renew my subscription →"}
+                {checkoutMutation.isPending
+                  ? "Opening checkout…"
+                  : plan.neverSubscribed ? "Subscribe →" : "Renew my subscription →"}
               </Text>
             </View>
           </View>
@@ -196,7 +228,7 @@ export default function DashboardScreen() {
                 Your alerts are still running. Renew before the {graceDaysLeft} day
                 {graceDaysLeft !== 1 ? "s are" : " is"} up and nothing changes.
               </Text>
-              <Text style={styles.pausedLink} onPress={() => Linking.openURL(RENEW_URL)}>
+              <Text style={styles.pausedLink} onPress={startCheckout}>
                 Renew my subscription →
               </Text>
             </View>

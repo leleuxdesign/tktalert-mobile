@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import {
-  View, Text, ScrollView, TextInput, StyleSheet, KeyboardAvoidingView, Platform,
+  View, Text, ScrollView, TextInput, StyleSheet, KeyboardAvoidingView, Platform, Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { trpc } from "@/lib/trpc";
@@ -30,6 +30,9 @@ export default function SupportScreen() {
       await utils.support.myThread.invalidate();
       refetch();
     },
+    // A failed send used to do nothing visible, which reads as "sent".
+    onError: (err: any) =>
+      Alert.alert("Message not sent", err?.message || "Please check your connection and try again."),
   });
 
   // Clear the badge once they are actually looking at the thread.
@@ -92,7 +95,9 @@ export default function SupportScreen() {
           <IosButton
             variant="blue"
             loading={send.isPending}
-            onPress={() => send.mutate({ body: draft.trim() })}
+            onPress={() => {
+              if (draft.trim()) send.mutate({ body: draft.trim() });
+            }}
           >
             Send
           </IosButton>

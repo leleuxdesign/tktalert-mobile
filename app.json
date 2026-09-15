@@ -85,7 +85,8 @@
     "updates": {
       "enabled": true,
       "checkAutomatically": "ON_LOAD",
-      "fallbackToCacheTimeout": 3000
+      "fallbackToCacheTimeout": 3000,
+      "url": "https://u.expo.dev/016ef01c-1621-4ca4-b943-14ad9408a821"
     },
     "runtimeVersion": {
       "policy": "appVersion"
