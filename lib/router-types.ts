@@ -22,12 +22,24 @@ export type MapAccess = {
   ticketMap: boolean;
   alerts: boolean;
   /**
-   * NOT SERVED YET (requested from Blade 2026-09-17). Whether ticket data
-   * exists for this account's city, independent of tier. A free account cannot
-   * call ticketHeat, so without this it cannot tell "locked" from "doesn't
-   * exist"; the app hides the locked Tickets segment until this is true.
+   * Whether ticket data exists for this account's city; same value for every
+   * tier (false for Milwaukee). The Tickets segment shows only when true:
+   * locked for free accounts, open for paid ones.
    */
-  ticketDataAvailable?: boolean;
+  ticketDataAvailable: boolean;
+};
+/** Zone color keys (tktalert-app shared/zoneColors.ts). Unknown keys render blue. */
+export type ZoneColorKey = "blue" | "green" | "orange" | "purple" | "red" | "teal" | "pink" | "yellow";
+/** map.myZones item: the caller's active zones; lat/lng null when unplaceable. */
+export type ZonePin = {
+  id: number;
+  label: string | null;
+  street: string;
+  blockStart: number;
+  blockEnd: number;
+  color: ZoneColorKey;
+  lat: number | null;
+  lng: number | null;
 };
 export type ComplaintHeat = {
   days: 30 | 90 | 365;
@@ -38,7 +50,14 @@ export type ComplaintHeat = {
   truncated: boolean;
   blocks: HeatBlock[];
 };
-export type TicketHeat = { days: 30 | 90 | 365; available: boolean; reason?: string; blocks: HeatBlock[] };
+export type TicketHeat = {
+  days: 30 | 90 | 365;
+  from: string;
+  to: string;
+  available: boolean;
+  reason?: string;
+  blocks: HeatBlock[];
+};
 
 const appRouter = t.router({
   auth: t.router({
@@ -90,8 +109,13 @@ const appRouter = t.router({
     // Every procedure needs a signed-in account.
     //
     // What this account can use; clients render locks/upsells from it:
-    //   { tier: "free" | "paid"; complaintMap: true; ticketMap: boolean; alerts: boolean }
-    access: t.procedure.query((): MapAccess => ({ tier: "free", complaintMap: true, ticketMap: false, alerts: false })),
+    //   { tier: "free" | "paid"; complaintMap: true; ticketMap: boolean;
+    //     ticketDataAvailable: boolean; alerts: boolean }
+    access: t.procedure.query((): MapAccess => ({
+      tier: "free", complaintMap: true, ticketMap: false, ticketDataAvailable: false, alerts: false,
+    })),
+    // The caller's own active zones as map pins (free or paid; no input).
+    myZones: t.procedure.query((): ZonePin[] => []),
     // FREE tier. Input: { days?: 30 | 90 | 365 = 30;
     //   bounds?: { north, south, east, west }; limit?: 1..2000 = 500 }
     // Block-level aggregates only; the most recent 72h are excluded server-side.
@@ -102,7 +126,7 @@ const appRouter = t.router({
     // FORBIDDEN "This feature requires a TattleTow subscription.". Until a city
     // has ticket data this returns { available: false, blocks: [] }.
     ticketHeat: t.procedure.input(passthrough).query((): TicketHeat => ({
-      days: 30, available: false, blocks: [],
+      days: 30, from: "", to: "", available: false, blocks: [],
     })),
   }),
   streets: t.router({
@@ -112,6 +136,7 @@ const appRouter = t.router({
     search: t.procedure.input(passthrough).query((): any[] => []),
   }),
   zones: t.router({
+    // Items carry `color: ZoneColorKey` (server-assigned, not user-editable).
     list: t.procedure.query((): any[] => []),
     create: t.procedure.input(passthrough).mutation((): any => ({})),
     delete: t.procedure.input(passthrough).mutation((): any => ({})),

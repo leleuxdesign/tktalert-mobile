@@ -16,16 +16,28 @@ import { keepPreviousData } from "@tanstack/react-query";
 import { Bell, ChevronRight, LocateFixed, Lock } from "lucide-react-native";
 import { trpc } from "@/lib/trpc";
 import { useCheckout } from "@/lib/useCheckout";
-import { colors, fontFamily, cardShadow, btnShadow } from "@/lib/ios6-theme";
+import { colors, fontFamily, cardShadow, btnShadow, zoneColor } from "@/lib/ios6-theme";
 import { DEFAULT_MAP_CENTER } from "@/lib/supported-locations";
-import type { HeatBlock } from "@/lib/router-types";
+import type { HeatBlock, ZonePin } from "@/lib/router-types";
 import { IosNavBar, IosPage, IosSegmented, IosSegment } from "@/components/ios6";
-import { TattleHeatMap, TattleHeatMapHandle, MapView } from "@/components/TattleHeatMap";
+import { TattleHeatMap, TattleHeatMapHandle, MapView, MapZonePin } from "@/components/TattleHeatMap";
 
 type Days = 30 | 90 | 365;
 type Mode = "complaints" | "tickets";
 
 const COLLAPSED_ROWS = 3;
+/**
+ * Truncation: the city-wide request is capped at 2000 blocks, highest counts
+ * first, so if the city ever has more, low-count blocks drop off. At street
+ * zoom those are exactly the blocks a person is looking at, so once zoomed in
+ * this far AND the city-wide answer says `truncated`, the screen also asks for
+ * just the surrounding area and merges the two. Bounds are padded and snapped
+ * to a grid so small pans reuse the same query (and the server's hourly cache
+ * means each one is a cheap filter). While not truncated, which is the normal
+ * case for Milwaukee, no extra request is ever made.
+ */
+const DETAIL_MIN_ZOOM = 14;
+const DETAIL_GRID_DEG = 0.02;
 const EXPANDED_ROWS = 25;
 
 const RANGE_SEGMENTS: IosSegment<"30" | "90" | "365">[] = [
@@ -33,6 +45,30 @@ const RANGE_SEGMENTS: IosSegment<"30" | "90" | "365">[] = [
   { key: "90", label: "90 days" },
   { key: "365", label: "1 year" },
 ];
+
+function snapBounds(b: MapView["bounds"]) {
+  const padLat = (b.north - b.south) * 0.5;
+  const padLng = (b.east - b.west) * 0.5;
+  const down = (n: number) => Math.floor(n / DETAIL_GRID_DEG) * DETAIL_GRID_DEG;
+  const up = (n: number) => Math.ceil(n / DETAIL_GRID_DEG) * DETAIL_GRID_DEG;
+  const r = (n: number) => Math.round(n * 1000) / 1000;
+  return {
+    north: r(Math.min(90, up(b.north + padLat))),
+    south: r(Math.max(-90, down(b.south - padLat))),
+    east: r(Math.min(180, up(b.east + padLng))),
+    west: r(Math.max(-180, down(b.west - padLng))),
+  };
+}
+
+function zoneTitle(z: ZonePin) {
+  return z.label?.trim() || z.street;
+}
+
+/** Popup second line: the block range, with the street when the title is a custom label. */
+function zoneRange(z: ZonePin) {
+  const range = `${z.blockStart}–${z.blockEnd}`;
+  return z.label?.trim() ? `${z.street} · ${range}` : range;
+}
 
 function unitLabel(mode: Mode, n: number) {
   if (mode === "tickets") return n === 1 ? "ticket" : "tickets";
@@ -71,7 +107,10 @@ export default function TattleMapScreen() {
   // Coming back from Stripe checkout: pick up the new tier without a pull.
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") accessQuery.refetch();
+      if (state === "active") {
+        accessQuery.refetch();
+        myZonesQuery.refetch();
+      }
     });
     return () => sub.remove();
   }, []);
@@ -87,7 +126,7 @@ export default function TattleMapScreen() {
   const ticketQuery = trpc.map.ticketHeat.useQuery(
     { days },
     {
-      enabled: isPaid && access?.ticketMap === true,
+      enabled: isPaid && access?.ticketMap === true && access?.ticketDataAvailable === true,
       retry: false,
       staleTime: 10 * 60 * 1000,
       placeholderData: keepPreviousData,
@@ -96,11 +135,9 @@ export default function TattleMapScreen() {
   const ticketsAvailable = isPaid && ticketQuery.data?.available === true;
 
   // The ticket map is an optional per-city extra and must never show up as an
-  // empty feature. A paid account sees Tickets only when the server has data.
-  // A free account sees it locked, but ONLY when ticket data exists for the
-  // city; `map.access` does not tell a free account that yet (see
-  // `ticketDataAvailable` in lib/router-types.ts), so until it does the locked
-  // segment stays hidden rather than upselling a map with nothing on it.
+  // empty feature. `ticketDataAvailable` (same for every tier) gates the
+  // segment: locked for a free account, open for a paid one once ticketHeat
+  // actually returns data. Milwaukee: false, so no Tickets segment at all.
   const showLockedTickets = isFree && access?.ticketDataAvailable === true;
   const showTicketsSegment = ticketsAvailable || showLockedTickets;
 
@@ -108,8 +145,49 @@ export default function TattleMapScreen() {
     if (mode === "tickets" && !ticketsAvailable) setMode("complaints");
   }, [mode, ticketsAvailable]);
 
+  const detailBounds = useMemo(
+    () =>
+      complaintQuery.data?.truncated && view && view.zoom >= DETAIL_MIN_ZOOM ? snapBounds(view.bounds) : null,
+    [complaintQuery.data?.truncated, view]
+  );
+  const detailQuery = trpc.map.complaintHeat.useQuery(
+    { days, bounds: detailBounds ?? undefined, limit: 2000 },
+    { enabled: mode === "complaints" && !!detailBounds, staleTime: 10 * 60 * 1000 }
+  );
+
   const activeQuery = mode === "tickets" ? ticketQuery : complaintQuery;
-  const blocks: HeatBlock[] = activeQuery.data?.blocks ?? [];
+  const blocks: HeatBlock[] = useMemo(() => {
+    const base = activeQuery.data?.blocks ?? [];
+    const extra = mode === "complaints" && detailBounds ? detailQuery.data?.blocks ?? [] : [];
+    if (extra.length === 0) return base;
+    const byKey = new Map<string, HeatBlock>();
+    for (const b of base) byKey.set(b.blockKey, b);
+    for (const b of extra) byKey.set(b.blockKey, b);
+    return Array.from(byKey.values()).sort((a, b) => b.count - a.count);
+  }, [activeQuery.data, detailQuery.data, detailBounds, mode]);
+
+  // The user's own zones as pins, free or paid. Unplaceable zones are skipped.
+  const myZonesQuery = trpc.map.myZones.useQuery(undefined, { staleTime: 60 * 1000 });
+  const placedZones = useMemo(
+    () =>
+      (myZonesQuery.data ?? []).filter(
+        (z): z is ZonePin & { lat: number; lng: number } =>
+          typeof z.lat === "number" && typeof z.lng === "number"
+      ),
+    [myZonesQuery.data]
+  );
+  const zonePins: MapZonePin[] = useMemo(
+    () =>
+      placedZones.map((z) => ({
+        id: z.id,
+        lat: z.lat,
+        lng: z.lng,
+        color: zoneColor(z.color).solid,
+        title: zoneTitle(z),
+        subtitle: zoneRange(z),
+      })),
+    [placedZones]
+  );
 
   const nearby = useMemo(() => {
     const visible = blocks.filter((b) => inView(b, view));
@@ -256,6 +334,7 @@ export default function TattleMapScreen() {
           ref={mapRef}
           blocks={blocks}
           unit={mode}
+          zones={zonePins}
           onViewChange={setView}
           onLoadError={() => setMapFailed(true)}
         />
@@ -321,6 +400,31 @@ export default function TattleMapScreen() {
           </View>
 
           <View style={styles.list}>{renderList()}</View>
+
+          {placedZones.length > 0 && (
+            <View style={styles.zonesSection}>
+              <Text style={styles.zonesLabel}>Your zones</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.zoneChips}>
+                {placedZones.map((z) => (
+                  <Pressable
+                    key={z.id}
+                    onPress={() => {
+                      mapRef.current?.flyTo(z.lat, z.lng, 17);
+                      setCardExpanded(false);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Show ${zoneTitle(z)} on the map`}
+                    style={({ pressed }) => [styles.zoneChip, pressed && { opacity: 0.7 }]}
+                  >
+                    <View style={[styles.zoneDot, { backgroundColor: zoneColor(z.color).solid }]} />
+                    <Text style={styles.zoneChipText} numberOfLines={1}>
+                      {zoneTitle(z)}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          )}
 
           {isFree && (
             <Pressable
@@ -426,6 +530,30 @@ const styles = StyleSheet.create({
   stateBox: { alignItems: "center", gap: 6, paddingVertical: 16, paddingHorizontal: 12 },
   stateText: { fontSize: 13, color: colors.textLight, fontFamily, textAlign: "center", lineHeight: 18 },
   link: { fontSize: 14, fontWeight: "700", color: colors.blue, fontFamily },
+  zonesSection: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 },
+  zonesLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: colors.textLight,
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+    fontFamily,
+  },
+  zoneChips: { gap: 6, paddingRight: 4 },
+  zoneChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    maxWidth: 180,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.separator,
+  },
+  zoneDot: { width: 10, height: 10, borderRadius: 5, borderWidth: 1.5, borderColor: "#fff", ...btnShadow },
+  zoneChipText: { fontSize: 13, fontWeight: "600", color: colors.text, fontFamily, flexShrink: 1 },
   upsell: {
     flexDirection: "row",
     alignItems: "center",

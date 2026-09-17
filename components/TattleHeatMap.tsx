@@ -64,6 +64,22 @@ function buildHtml(lat: number, lng: number, zoom: number) {
       80%  { opacity: 0.08; }
       100% { transform: scale(1.9); opacity: 0; }
     }
+    /* The user's own watch-zone pins: round, zone-colored, soft halo. */
+    .tt-zone { position: relative; width: 36px; height: 36px; }
+    .tt-zone .halo {
+      position: absolute; left: 0; top: 0; width: 36px; height: 36px; border-radius: 50%;
+      background: var(--zc); opacity: 0.22; box-shadow: 0 0 14px 4px var(--zc);
+    }
+    .tt-zone .pin {
+      position: absolute; left: 50%; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px;
+      border-radius: 50%; background: var(--zc); border: 2.5px solid #fff;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.4), inset 0 3px 3px rgba(255,255,255,0.45);
+    }
+    .leaflet-popup.tt-zone-pop .leaflet-popup-content-wrapper {
+      border-radius: 10px; background: rgba(250,250,248,0.97); border: 1px solid #c8c7cc;
+    }
+    .leaflet-popup.tt-zone-pop .leaflet-popup-content { margin: 8px 12px; font: 12px "Helvetica Neue", Helvetica, sans-serif; color: #6d6d72; }
+    .leaflet-popup.tt-zone-pop .leaflet-popup-content b { display: block; font-size: 13px; color: #1a1a1a; margin-bottom: 1px; }
     .leaflet-tooltip.tt-tip {
       font: 600 12px "Helvetica Neue", Helvetica, sans-serif; color: #1a1a1a;
       background: rgba(250,250,248,0.96); border: 1px solid #c8c7cc; border-radius: 8px;
@@ -97,6 +113,9 @@ function buildHtml(lat: number, lng: number, zoom: number) {
         gradient: { 0.2: '#5aafff', 0.45: '#ffd060', 0.7: '#ff9500', 1.0: '#ff3b30' },
       }).addTo(map);
       var pulses = L.layerGroup().addTo(map);
+      // Own pane above the heat canvas and the hotspot pulses.
+      map.createPane('zones').style.zIndex = 650;
+      var zoneLayer = L.layerGroup().addTo(map);
       var blocks = [];
       var unit = 'complaints';
 
@@ -149,6 +168,29 @@ function buildHtml(lat: number, lng: number, zoom: number) {
           heat.setLatLngs(blocks.map(function (b) { return [b.lat, b.lng, b.count]; }));
           drawPulses();
         },
+        setZones: function (zones) {
+          zoneLayer.clearLayers();
+          (zones || []).forEach(function (z) {
+            if (typeof z.lat !== 'number' || typeof z.lng !== 'number') return;
+            var wrap = document.createElement('div');
+            wrap.className = 'tt-zone';
+            // Only a hex color reaches this style (resolved on the RN side).
+            if (/^#[0-9a-fA-F]{3,8}$/.test(z.color)) wrap.style.setProperty('--zc', z.color);
+            wrap.innerHTML = '<span class="halo"></span><span class="pin"></span>';
+            var icon = L.divIcon({ className: '', html: wrap, iconSize: [36, 36], iconAnchor: [18, 18] });
+            // textContent, never innerHTML, for user-entered labels.
+            var pop = document.createElement('div');
+            var title = document.createElement('b');
+            title.textContent = z.title;
+            var sub = document.createElement('span');
+            sub.textContent = z.subtitle;
+            pop.appendChild(title);
+            pop.appendChild(sub);
+            L.marker([z.lat, z.lng], { icon: icon, pane: 'zones', keyboard: false })
+              .bindPopup(pop, { className: 'tt-zone-pop', closeButton: false, offset: [0, -12] })
+              .addTo(zoneLayer);
+          });
+        },
         flyTo: function (lat, lng, zoom) {
           map.flyTo([lat, lng], zoom || 17, { duration: 0.8 });
         },
@@ -163,15 +205,19 @@ function buildHtml(lat: number, lng: number, zoom: number) {
 </html>`;
 }
 
+/** A watch-zone pin, already resolved for display (hex color, text lines). */
+export type MapZonePin = { id: number; lat: number; lng: number; color: string; title: string; subtitle: string };
+
 export const TattleHeatMap = forwardRef<
   TattleHeatMapHandle,
   {
     blocks: HeatBlock[];
     unit: "complaints" | "tickets";
+    zones?: MapZonePin[];
     onViewChange?: (view: MapView) => void;
     onLoadError?: () => void;
   }
->(function TattleHeatMap({ blocks, unit, onViewChange, onLoadError }, ref) {
+>(function TattleHeatMap({ blocks, unit, zones = [], onViewChange, onLoadError }, ref) {
   const webRef = useRef<WebView>(null);
   const readyRef = useRef(false);
   // Built once: data goes in via injectJavaScript so the map keeps its viewport.
@@ -183,9 +229,18 @@ export const TattleHeatMap = forwardRef<
     webRef.current.injectJavaScript(`window.__tattle && window.__tattle.setData(${payload}); true;`);
   }, [blocks, unit]);
 
+  const pushZones = useCallback(() => {
+    if (!readyRef.current || !webRef.current) return;
+    webRef.current.injectJavaScript(`window.__tattle && window.__tattle.setZones(${JSON.stringify(zones)}); true;`);
+  }, [zones]);
+
   useEffect(() => {
     pushData();
   }, [pushData]);
+
+  useEffect(() => {
+    pushZones();
+  }, [pushZones]);
 
   useImperativeHandle(
     ref,
@@ -209,6 +264,7 @@ export const TattleHeatMap = forwardRef<
     if (msg?.type === "ready") {
       readyRef.current = true;
       pushData();
+      pushZones();
     } else if (msg?.type === "view" && msg.center && msg.bounds) {
       onViewChange?.({ center: msg.center, bounds: msg.bounds, zoom: msg.zoom });
     } else if (msg?.type === "error") {

@@ -6,7 +6,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Bell, AlertCircle, ChevronRight, Car } from "lucide-react-native";
 import { trpc } from "@/lib/trpc";
 import { useCheckout } from "@/lib/useCheckout";
-import { colors, gradients, fontFamily } from "@/lib/ios6-theme";
+import { colors, gradients, fontFamily, zoneColor } from "@/lib/ios6-theme";
 import {
   IosPage,
   IosNavBar,
@@ -273,7 +273,7 @@ export default function DashboardScreen() {
                   label={zone.label ?? zone.street}
                   street={zone.street}
                   addressRange={`${zone.addressMin}–${zone.addressMax}`}
-                  gradient={i % 2 === 0 ? gradients.iconBlue : gradients.iconGreen}
+                  gradient={zoneColor(zone.color).gradient}
                   onPress={() => router.push("/watch-zones")}
                 />
               ))}

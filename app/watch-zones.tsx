@@ -5,7 +5,7 @@ import { useCheckout } from "@/lib/useCheckout";
 import { useRouter } from "expo-router";
 import { Navigation } from "lucide-react-native";
 import { trpc } from "@/lib/trpc";
-import { colors, gradients, fontFamily } from "@/lib/ios6-theme";
+import { colors, fontFamily, zoneColor } from "@/lib/ios6-theme";
 import { SERVICE_AREAS, ServiceArea, findServiceArea } from "@/lib/supported-locations";
 import { ReverseGeocodeResult } from "@/lib/geocode";
 import { AddressMapPicker } from "@/components/AddressMapPicker";
@@ -52,6 +52,7 @@ export default function WatchZonesScreen() {
   const createZone = trpc.zones.create.useMutation({
     onSuccess: () => {
       utils.zones.list.invalidate();
+      utils.map.myZones.invalidate(); // Tattle Map pins
       setShowAddZone(false);
       setNewZone(emptyZoneDraft);
       setShowDisclaimer(true);
@@ -60,7 +61,10 @@ export default function WatchZonesScreen() {
   });
 
   const deleteZone = trpc.zones.delete.useMutation({
-    onSuccess: () => utils.zones.list.invalidate(),
+    onSuccess: () => {
+      utils.zones.list.invalidate();
+      utils.map.myZones.invalidate(); // Tattle Map pins
+    },
     onError: (err: any) => Alert.alert("Error", err.message || "Could not remove zone."),
   });
 
@@ -119,7 +123,6 @@ export default function WatchZonesScreen() {
   // Free = no alerts (map.access). Undefined while loading, so no prompt flashes
   // up for a paid account.
   const isFree = accessQuery.data?.alerts === false;
-  const tileGradients = [gradients.iconBlue, gradients.iconGreen] as const;
 
   return (
     <IosPage>
@@ -155,7 +158,7 @@ export default function WatchZonesScreen() {
                 label={zone.label ?? zone.street}
                 street={zone.street}
                 addressRange={`${zone.addressMin}–${zone.addressMax}`}
-                gradient={tileGradients[i % tileGradients.length]}
+                gradient={zoneColor(zone.color).gradient}
                 onDelete={() => handleDeleteZone(zone.id, zone.label ?? zone.street)}
               />
             ))}

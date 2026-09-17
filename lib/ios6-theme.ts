@@ -57,6 +57,30 @@ export const gradients = {
   glossHighlight: ["rgba(255,255,255,0.4)", "rgba(255,255,255,0.1)"] as const,
 };
 
+// ── Watch-zone colors ────────────────────────────────────────────────────
+// Keys are the server contract (tktalert-app shared/zoneColors.ts); the server
+// stores and returns keys only, each client picks its own shades. This is the
+// ONE mapping on mobile: tiles use `gradient`, Tattle Map pins use `solid`.
+// Blue and green are the exact gradients the tiles alternated between before.
+export const ZONE_COLOR_KEYS = ["blue", "green", "orange", "purple", "red", "teal", "pink", "yellow"] as const;
+export type ZoneColorKey = (typeof ZONE_COLOR_KEYS)[number];
+
+const zonePalette: Record<ZoneColorKey, { gradient: readonly [string, string]; solid: string }> = {
+  blue: { gradient: gradients.iconBlue, solid: "#1a7fd4" },
+  green: { gradient: gradients.iconGreen, solid: "#34c759" },
+  orange: { gradient: gradients.iconOrange, solid: "#ff9500" },
+  purple: { gradient: gradients.iconPurple, solid: "#9b59b6" },
+  red: { gradient: gradients.iconRed, solid: "#ff3b30" },
+  teal: { gradient: ["#6fe3e0", "#25b3b0"], solid: "#25b3b0" },
+  pink: { gradient: ["#ff8fc0", "#ff2d7a"], solid: "#ff2d7a" },
+  yellow: { gradient: ["#ffe066", "#f5b800"], solid: "#e0a800" },
+};
+
+/** Palette entry for a zone color key; missing or unknown keys fall back to blue. */
+export function zoneColor(key: string | null | undefined) {
+  return (key && (zonePalette as Record<string, (typeof zonePalette)[ZoneColorKey]>)[key]) || zonePalette.blue;
+}
+
 export const cardShadow = {
   shadowColor: "#000",
   shadowOffset: { width: 0, height: 2 },
