@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { StreetPicker } from "@/components/StreetPicker";
-import { View, Text, ScrollView, Alert, StyleSheet } from "react-native";
+import { View, Text, ScrollView, Alert, StyleSheet, AppState } from "react-native";
+import { useCheckout } from "@/lib/useCheckout";
 import { useRouter } from "expo-router";
 import { Navigation } from "lucide-react-native";
 import { trpc } from "@/lib/trpc";
@@ -37,6 +38,16 @@ export default function WatchZonesScreen() {
   const [newZone, setNewZone] = useState(emptyZoneDraft);
 
   const zonesQuery = trpc.zones.list.useQuery();
+  const accessQuery = trpc.map.access.useQuery();
+  const { startCheckout, isPending: checkoutPending } = useCheckout();
+
+  // Returning from Stripe: pick up the new tier so the prompt disappears.
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") accessQuery.refetch();
+    });
+    return () => sub.remove();
+  }, []);
 
   const createZone = trpc.zones.create.useMutation({
     onSuccess: () => {
@@ -105,6 +116,9 @@ export default function WatchZonesScreen() {
   };
 
   const zones = zonesQuery.data ?? [];
+  // Free = no alerts (map.access). Undefined while loading, so no prompt flashes
+  // up for a paid account.
+  const isFree = accessQuery.data?.alerts === false;
   const tileGradients = [gradients.iconBlue, gradients.iconGreen] as const;
 
   return (
@@ -112,6 +126,26 @@ export default function WatchZonesScreen() {
       <IosNavBar title="Manage Zones" onBack={() => router.back()} />
       <IosKeyboardScroll>
         <IosSectionLabel>Your Watch Zones</IosSectionLabel>
+
+        {/*
+          Owner ruling 2026-09-17: free accounts keep and create zones, but
+          zones only alert on a subscription. This is where zones are made, so
+          it is the one place that must say so. The Dashboard's paused banner
+          already covers the same ground there, so it is not repeated.
+        */}
+        {isFree && zones.length > 0 && (
+          <View style={styles.upgradeBanner}>
+            <Text style={styles.upgradeBody}>
+              Your {zones.length === 1 ? "zone is" : `${zones.length} zones are`} saved, but alerts only
+              run on a subscription.
+            </Text>
+            <Text style={styles.upgradeLink} onPress={startCheckout}>
+              {checkoutPending
+                ? "Opening checkout…"
+                : `Upgrade to get alerts for your ${zones.length === 1 ? "zone" : `${zones.length} zones`} →`}
+            </Text>
+          </View>
+        )}
 
         {zones.length > 0 ? (
           <View style={styles.tileRow}>
@@ -129,7 +163,11 @@ export default function WatchZonesScreen() {
         ) : (
           <IosCard style={styles.emptyZones}>
             <Text style={styles.emptyZonesText}>No watch zones yet</Text>
-            <Text style={styles.emptyZonesSubtext}>Add an address below to start getting alerts.</Text>
+            <Text style={styles.emptyZonesSubtext}>
+              {isFree
+                ? "Add an address below. Zones alert once you subscribe."
+                : "Add an address below to start getting alerts."}
+            </Text>
           </IosCard>
         )}
 
@@ -214,6 +252,17 @@ export default function WatchZonesScreen() {
 
 const styles = StyleSheet.create({
   tileRow: { flexDirection: "row", gap: 14, flexWrap: "wrap" },
+  // Same palette as the Dashboard's paused banner.
+  upgradeBanner: {
+    backgroundColor: "#fdecea",
+    borderWidth: 1,
+    borderColor: "#f0b4ae",
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 14,
+  },
+  upgradeBody: { fontSize: 13, color: "#8c1d13", fontFamily, lineHeight: 19 },
+  upgradeLink: { fontSize: 14, fontWeight: "700", color: "#1a7fd4", fontFamily, marginTop: 8 },
   emptyZones: { alignItems: "center", paddingVertical: 24, gap: 4 },
   emptyZonesText: { fontSize: 14, fontWeight: "600", color: colors.text, fontFamily },
   emptyZonesSubtext: { fontSize: 12, color: colors.textLight, fontFamily },
