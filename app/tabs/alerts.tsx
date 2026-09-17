@@ -15,7 +15,10 @@ export default function AlertsScreen() {
   });
 
   const totalAlerts = alerts?.length ?? 0;
-  const estimatedSavings = totalAlerts * AVERAGE_TICKET_VALUE;
+  // Savings count each complaint once. One complaint can reach you as a push,
+  // an email and a text, and none of those is a second avoided ticket.
+  const complaintCount = new Set((alerts ?? []).map((a: any) => a.complaintId)).size;
+  const estimatedSavings = complaintCount * AVERAGE_TICKET_VALUE;
 
   return (
     <IosPage>
@@ -34,7 +37,7 @@ export default function AlertsScreen() {
                 <Text style={styles.statsLabel}>Est. Saved</Text>
               </View>
             </View>
-            <Text style={styles.statsFootnote}>Estimated at ${AVERAGE_TICKET_VALUE}/avoided ticket</Text>
+            <Text style={styles.statsFootnote}>Estimated at ${AVERAGE_TICKET_VALUE} per complaint alerted</Text>
           </IosCard>
         )}
 
