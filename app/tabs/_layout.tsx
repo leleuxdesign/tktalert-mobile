@@ -1,7 +1,7 @@
 import { Tabs } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Bell, AlertCircle, Settings } from "lucide-react-native";
+import { Bell, AlertCircle, Settings, MapIcon } from "lucide-react-native";
 import { gradients } from "@/lib/ios6-theme";
 
 function TabIcon({ Icon, focused }: { Icon: typeof Bell; focused: boolean }) {
@@ -34,6 +34,10 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="dashboard"
         options={{ title: "Dashboard", tabBarIcon: ({ focused }) => <TabIcon Icon={Bell} focused={focused} /> }}
+      />
+      <Tabs.Screen
+        name="map"
+        options={{ title: "Tattle Map", tabBarIcon: ({ focused }) => <TabIcon Icon={MapIcon} focused={focused} /> }}
       />
       <Tabs.Screen
         name="alerts"

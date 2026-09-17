@@ -15,6 +15,31 @@ import superjson from "superjson";
 const t = initTRPC.create({ transformer: superjson });
 const passthrough = (input: unknown) => input as any;
 
+export type HeatBlock = { blockKey: string; label: string; lat: number; lng: number; count: number };
+export type MapAccess = {
+  tier: "free" | "paid";
+  complaintMap: true;
+  ticketMap: boolean;
+  alerts: boolean;
+  /**
+   * NOT SERVED YET (requested from Blade 2026-09-17). Whether ticket data
+   * exists for this account's city, independent of tier. A free account cannot
+   * call ticketHeat, so without this it cannot tell "locked" from "doesn't
+   * exist"; the app hides the locked Tickets segment until this is true.
+   */
+  ticketDataAvailable?: boolean;
+};
+export type ComplaintHeat = {
+  days: 30 | 90 | 365;
+  from: string;
+  to: string;
+  generatedAt: string;
+  totalBlocks: number;
+  truncated: boolean;
+  blocks: HeatBlock[];
+};
+export type TicketHeat = { days: 30 | 90 | 365; available: boolean; reason?: string; blocks: HeatBlock[] };
+
 const appRouter = t.router({
   auth: t.router({
     me: t.procedure.query((): any => ({})),
@@ -59,6 +84,26 @@ const appRouter = t.router({
     // now; the v1.5 support chat supersedes it.
     submit: t.procedure.input(passthrough).mutation((): any => ({})),
     mine: t.procedure.query((): any => ({ count: 0 })),
+  }),
+  map: t.router({
+    // Tattle Map (tktalert-app server/tattleMap.ts + server/entitlement.ts).
+    // Every procedure needs a signed-in account.
+    //
+    // What this account can use; clients render locks/upsells from it:
+    //   { tier: "free" | "paid"; complaintMap: true; ticketMap: boolean; alerts: boolean }
+    access: t.procedure.query((): MapAccess => ({ tier: "free", complaintMap: true, ticketMap: false, alerts: false })),
+    // FREE tier. Input: { days?: 30 | 90 | 365 = 30;
+    //   bounds?: { north, south, east, west }; limit?: 1..2000 = 500 }
+    // Block-level aggregates only; the most recent 72h are excluded server-side.
+    complaintHeat: t.procedure.input(passthrough).query((): ComplaintHeat => ({
+      days: 30, from: "", to: "", generatedAt: "", totalBlocks: 0, truncated: false, blocks: [],
+    })),
+    // PAID tier. Input: { days?: 30 | 90 | 365 } | undefined. Free accounts get
+    // FORBIDDEN "This feature requires a TattleTow subscription.". Until a city
+    // has ticket data this returns { available: false, blocks: [] }.
+    ticketHeat: t.procedure.input(passthrough).query((): TicketHeat => ({
+      days: 30, available: false, blocks: [],
+    })),
   }),
   streets: t.router({
     // Typeahead over the City of Milwaukee's official street list, so a watch

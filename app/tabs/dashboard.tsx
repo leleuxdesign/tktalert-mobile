@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { describeSubscription } from "../../lib/subscription";
-import { View, Text, ScrollView, RefreshControl, ActivityIndicator, StyleSheet, Pressable, Alert, Linking, AppState } from "react-native";
+import { View, Text, ScrollView, RefreshControl, ActivityIndicator, StyleSheet, Pressable, Alert, AppState } from "react-native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Bell, AlertCircle, ChevronRight, Car } from "lucide-react-native";
 import { trpc } from "@/lib/trpc";
+import { useCheckout } from "@/lib/useCheckout";
 import { colors, gradients, fontFamily } from "@/lib/ios6-theme";
 import {
   IosPage,
@@ -29,9 +30,6 @@ interface User {
   graceUntil?: string | null;
 }
 
-const APP_WEB_URL = "https://app.tattletow.com";
-/** Web checkout: only a fallback now, if the app cannot start its own. */
-const RENEW_URL = `${APP_WEB_URL}/subscribe`;
 /** Key for the once-per-day throttle on the grace prompt. */
 const GRACE_PROMPT_KEY = "grace_prompt_last_shown";
 
@@ -54,24 +52,9 @@ export default function DashboardScreen() {
   const meQuery = trpc.auth.me.useQuery();
   const user: User | null = meQuery.data ?? cachedUser;
 
-  // Checkout starts from the app's own session: the server creates the Stripe
-  // session for this signed-in account, so the customer is not sent to the web
-  // to sign in a second time. Stripe then returns them to /subscribed, which
-  // hands them back to the app instead of leaving them in the web dashboard.
-  const checkoutMutation = trpc.stripe.createCheckoutSession.useMutation({
-    onSuccess: async (data: any) => {
-      await Linking.openURL(data?.url || RENEW_URL);
-    },
-    // Fall back to web checkout rather than leaving the button dead.
-    onError: () => {
-      Linking.openURL(RENEW_URL);
-    },
-  });
-  const startCheckout = () =>
-    checkoutMutation.mutate({
-      successUrl: `${APP_WEB_URL}/subscribed?source=app`,
-      cancelUrl: `${APP_WEB_URL}/subscribed?source=app&cancelled=1`,
-    });
+  // App-started Stripe checkout (see lib/useCheckout.ts), shared with the
+  // Tattle Map's upgrade prompts.
+  const { startCheckout, isPending: checkoutPending } = useCheckout();
 
   // Returning from Stripe in the browser: refresh so a new subscription shows
   // as active without the customer needing to know to pull down.
@@ -214,7 +197,7 @@ export default function DashboardScreen() {
                 style={styles.pausedLink}
                 onPress={startCheckout}
               >
-                {checkoutMutation.isPending
+                {checkoutPending
                   ? "Opening checkout…"
                   : plan.neverSubscribed ? "Subscribe →" : "Renew my subscription →"}
               </Text>

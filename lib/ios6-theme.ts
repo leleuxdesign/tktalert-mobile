@@ -38,6 +38,8 @@ export const gradients = {
   btnRed: ["#ff7b74", "#ff3b30", "#cc1a10"] as const,
   btnSilver: ["#f5f5f7", "#e0e0e5", "#c8c8cd"] as const,
   backBtn: ["#5a8fc4", "#3a6fa4", "#2a5f94"] as const,
+  /** Selected segment of an IosSegmented control. */
+  segSelected: ["#3a6fa4", "#2a5f94", "#1f4f80"] as const,
   card: ["#fafaf8", "#f0efeb"] as const,
   iconBlue: ["#5aafff", "#1a7fd4"] as const,
   iconGreen: ["#7de87d", "#4cd964"] as const,

@@ -116,6 +116,70 @@ export function IosButton({
   );
 }
 
+// ── Segmented control (iOS 6 bordered style) ─────────────────────────────
+// Silver glossy segments; the selected one sinks into a dark blue gradient.
+// NOTE for E2E: like IosButton this is a Pressable around a LinearGradient,
+// so automated taps may not register; hand-tap it.
+export type IosSegment<K extends string> = {
+  key: K;
+  label: string;
+  icon?: React.ReactNode;
+  /** Rendered dimmed; still tappable so the screen can explain the lock. */
+  locked?: boolean;
+};
+
+export function IosSegmented<K extends string>({
+  segments,
+  value,
+  onChange,
+  style,
+  compact,
+}: {
+  segments: IosSegment<K>[];
+  value: K;
+  onChange: (key: K) => void;
+  style?: StyleProp<ViewStyle>;
+  compact?: boolean;
+}) {
+  return (
+    <View style={[styles.segWrap, btnShadow, style]}>
+      {segments.map((seg, i) => {
+        const selected = seg.key === value;
+        return (
+          <Pressable
+            key={seg.key}
+            onPress={() => onChange(seg.key)}
+            accessibilityRole="button"
+            accessibilityState={{ selected }}
+            accessibilityLabel={seg.locked ? `${seg.label}, locked` : seg.label}
+            style={({ pressed }) => [
+              { flex: 1, opacity: pressed ? 0.85 : 1 },
+              i > 0 && styles.segDivider,
+            ]}
+          >
+            <LinearGradient
+              colors={(selected ? gradients.segSelected : gradients.btnSilver) as any}
+              style={[styles.seg, compact && styles.segCompact]}
+            >
+              {seg.icon}
+              <Text
+                numberOfLines={1}
+                style={[
+                  styles.segText,
+                  compact && styles.segTextCompact,
+                  { color: selected ? "#fff" : seg.locked ? colors.textLight : colors.text },
+                ]}
+              >
+                {seg.label}
+              </Text>
+            </LinearGradient>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 // ── Inputs ───────────────────────────────────────────────────────────────
 export function IosInput({ style, ...props }: TextInputProps) {
   return (
@@ -641,6 +705,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   btnText: { fontSize: 17, fontWeight: "700", fontFamily },
+  segWrap: {
+    flexDirection: "row",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#7a7a80",
+    overflow: "hidden",
+    backgroundColor: "#c8c8cd",
+  },
+  segDivider: { borderLeftWidth: 1, borderLeftColor: "#8a8a8f" },
+  seg: {
+    height: 32,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+  },
+  segCompact: { height: 28, paddingHorizontal: 6 },
+  segText: { fontSize: 13, fontWeight: "700", fontFamily },
+  segTextCompact: { fontSize: 12 },
   input: {
     width: "100%",
     height: 44,
