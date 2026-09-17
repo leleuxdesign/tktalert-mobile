@@ -27,6 +27,10 @@ export type MapAccess = {
    * locked for free accounts, open for paid ones.
    */
   ticketDataAvailable: boolean;
+  /** Max active watch zones: 1 for free, null for unlimited (paid). */
+  zoneLimit: number | null;
+  /** Active zones. May exceed zoneLimit for legacy/lapsed accounts, who keep them all. */
+  zoneCount: number;
 };
 /** Zone color keys (tktalert-app shared/zoneColors.ts). Unknown keys render blue. */
 export type ZoneColorKey = "blue" | "green" | "orange" | "purple" | "red" | "teal" | "pink" | "yellow";
@@ -110,9 +114,10 @@ const appRouter = t.router({
     //
     // What this account can use; clients render locks/upsells from it:
     //   { tier: "free" | "paid"; complaintMap: true; ticketMap: boolean;
-    //     ticketDataAvailable: boolean; alerts: boolean }
+    //     ticketDataAvailable: boolean; alerts: boolean;
+    //     zoneLimit: number | null; zoneCount: number }
     access: t.procedure.query((): MapAccess => ({
-      tier: "free", complaintMap: true, ticketMap: false, ticketDataAvailable: false, alerts: false,
+      tier: "free", complaintMap: true, ticketMap: false, ticketDataAvailable: false, alerts: false, zoneLimit: 1, zoneCount: 0,
     })),
     // The caller's own active zones as map pins (free or paid; no input).
     myZones: t.procedure.query((): ZonePin[] => []),
@@ -138,6 +143,8 @@ const appRouter = t.router({
   zones: t.router({
     // Items carry `color: ZoneColorKey` (server-assigned, not user-editable).
     list: t.procedure.query((): any[] => []),
+    // FORBIDDEN "Free accounts include 1 watch zone. Subscribe to add more."
+    // when a free account is already at map.access().zoneLimit.
     create: t.procedure.input(passthrough).mutation((): any => ({})),
     delete: t.procedure.input(passthrough).mutation((): any => ({})),
   }),

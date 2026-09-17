@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { StreetPicker } from "@/components/StreetPicker";
-import { View, Text, ScrollView, Alert, StyleSheet, AppState } from "react-native";
+import { View, Text, ScrollView, Alert, StyleSheet, AppState, Pressable } from "react-native";
 import { useCheckout } from "@/lib/useCheckout";
 import { useRouter } from "expo-router";
-import { Navigation } from "lucide-react-native";
+import { Navigation, Lock } from "lucide-react-native";
 import { trpc } from "@/lib/trpc";
 import { colors, fontFamily, zoneColor } from "@/lib/ios6-theme";
 import { SERVICE_AREAS, ServiceArea, findServiceArea } from "@/lib/supported-locations";
@@ -44,7 +44,10 @@ export default function WatchZonesScreen() {
   // Returning from Stripe: pick up the new tier so the prompt disappears.
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") accessQuery.refetch();
+      if (state === "active") {
+        accessQuery.refetch();
+        zonesQuery.refetch();
+      }
     });
     return () => sub.remove();
   }, []);
@@ -53,17 +56,31 @@ export default function WatchZonesScreen() {
     onSuccess: () => {
       utils.zones.list.invalidate();
       utils.map.myZones.invalidate(); // Tattle Map pins
+      utils.map.access.invalidate(); // zoneCount
       setShowAddZone(false);
       setNewZone(emptyZoneDraft);
       setShowDisclaimer(true);
     },
-    onError: (err: any) => Alert.alert("Error", err.message || "Could not add zone."),
+    onError: (err: any) => {
+      // The free-tier zone limit, if the client's view of it was stale.
+      if (err?.data?.code === "FORBIDDEN") {
+        utils.map.access.invalidate();
+        setShowAddZone(false);
+        Alert.alert("Watch zone limit", err.message || "Subscribe to add more watch zones.", [
+          { text: "Not Now", style: "cancel" },
+          { text: "Subscribe", onPress: startCheckout },
+        ]);
+        return;
+      }
+      Alert.alert("Error", err.message || "Could not add zone.");
+    },
   });
 
   const deleteZone = trpc.zones.delete.useMutation({
     onSuccess: () => {
       utils.zones.list.invalidate();
       utils.map.myZones.invalidate(); // Tattle Map pins
+      utils.map.access.invalidate(); // zoneCount
     },
     onError: (err: any) => Alert.alert("Error", err.message || "Could not remove zone."),
   });
@@ -124,19 +141,39 @@ export default function WatchZonesScreen() {
   // up for a paid account.
   const isFree = accessQuery.data?.alerts === false;
 
+  // Owner ruling 2026-09-17: free = 1 watch zone, paid = unlimited. Legacy or
+  // lapsed accounts over the limit keep (and can delete) every zone; they just
+  // can't add. The larger of the two counts is used so a just-created zone
+  // locks the button before map.access has refetched.
+  const zoneLimit = accessQuery.data?.zoneLimit ?? null;
+  const zoneCount = Math.max(accessQuery.data?.zoneCount ?? 0, zones.length);
+  const atZoneLimit = zoneLimit !== null && zoneCount >= zoneLimit;
+  const zoneWord = (n: number) => (n === 1 ? "zone" : "zones");
+
   return (
     <IosPage>
       <IosNavBar title="Manage Zones" onBack={() => router.back()} />
       <IosKeyboardScroll>
-        <IosSectionLabel>Your Watch Zones</IosSectionLabel>
+        <View style={styles.sectionHeaderRow}>
+          <IosSectionLabel>Your Watch Zones</IosSectionLabel>
+          {zoneLimit !== null && (
+            <Text style={styles.zoneCountText}>
+              {zoneCount <= zoneLimit
+                ? `${zoneCount} of ${zoneLimit} ${zoneWord(zoneLimit)}`
+                : `${zoneCount} zones · free includes ${zoneLimit}`}
+            </Text>
+          )}
+        </View>
 
         {/*
           Owner ruling 2026-09-17: free accounts keep and create zones, but
           zones only alert on a subscription. This is where zones are made, so
           it is the one place that must say so. The Dashboard's paused banner
-          already covers the same ground there, so it is not repeated.
+          already covers the same ground there, so it is not repeated. At the
+          zone limit this merges into the single message in place of the Add
+          button below, so there are never two upsells stacked.
         */}
-        {isFree && zones.length > 0 && (
+        {isFree && zones.length > 0 && !atZoneLimit && (
           <View style={styles.upgradeBanner}>
             <Text style={styles.upgradeBody}>
               Your {zones.length === 1 ? "zone is" : `${zones.length} zones are`} saved, but alerts only
@@ -174,7 +211,35 @@ export default function WatchZonesScreen() {
           </IosCard>
         )}
 
-        {!showAddZone && (
+        {atZoneLimit && (
+          <Pressable
+            onPress={startCheckout}
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.limitCard, pressed && { opacity: 0.85 }]}
+          >
+            <View style={styles.limitTitleRow}>
+              <Lock size={14} color="#8c1d13" strokeWidth={2.5} />
+              <Text style={styles.limitTitle}>
+                Free accounts include {zoneLimit} watch {zoneWord(zoneLimit ?? 1)}.
+              </Text>
+            </View>
+            {zones.length > 0 && (
+              <Text style={styles.upgradeBody}>
+                Your {zones.length === 1 ? "zone is" : `${zones.length} zones are`} saved
+                {isFree ? ", but alerts only run on a subscription." : "."}
+              </Text>
+            )}
+            <Text style={styles.upgradeLink}>
+              {checkoutPending
+                ? "Opening checkout…"
+                : isFree
+                  ? "Subscribe to get alerts and add more zones →"
+                  : "Subscribe to add more →"}
+            </Text>
+          </Pressable>
+        )}
+
+        {!atZoneLimit && !showAddZone && (
           <View style={{ marginTop: 16 }}>
             <IosButton variant="silver" onPress={() => setShowAddZone(true)}>
               + Add Watch Zone
@@ -182,7 +247,7 @@ export default function WatchZonesScreen() {
           </View>
         )}
 
-        {showAddZone && (
+        {!atZoneLimit && showAddZone && (
           <IosCard style={{ marginTop: 16, padding: 16 }}>
             <Text style={styles.addZoneTitle}>New Watch Zone</Text>
 
@@ -264,6 +329,18 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 14,
   },
+  sectionHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" },
+  zoneCountText: { fontSize: 12, fontWeight: "600", color: colors.textLight, fontFamily, marginBottom: 8, paddingRight: 4 },
+  limitCard: {
+    marginTop: 16,
+    backgroundColor: "#fdecea",
+    borderWidth: 1,
+    borderColor: "#f0b4ae",
+    borderRadius: 10,
+    padding: 14,
+  },
+  limitTitleRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 },
+  limitTitle: { fontSize: 14, fontWeight: "700", color: "#8c1d13", fontFamily, flexShrink: 1 },
   upgradeBody: { fontSize: 13, color: "#8c1d13", fontFamily, lineHeight: 19 },
   upgradeLink: { fontSize: 14, fontWeight: "700", color: "#1a7fd4", fontFamily, marginTop: 8 },
   emptyZones: { alignItems: "center", paddingVertical: 24, gap: 4 },
