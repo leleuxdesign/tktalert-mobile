@@ -365,19 +365,17 @@ export function IosTableRow({
   last?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
-  const Wrapper = onPress ? Pressable : View;
+  const rowStyle = [styles.tableRow, !last && styles.tableRowBorder, style];
+  // Only Pressable accepts a function style; a View silently drops one, which
+  // collapsed every non-tappable row into a stacked column.
+  if (!onPress) return <View style={rowStyle}>{children}</View>;
   return (
-    <Wrapper
+    <Pressable
       onPress={onPress}
-      style={({ pressed }: any) => [
-        styles.tableRow,
-        !last && styles.tableRowBorder,
-        pressed && onPress ? { backgroundColor: "#d4d4d8" } : null,
-        style,
-      ]}
+      style={({ pressed }) => [...rowStyle, pressed ? { backgroundColor: "#d4d4d8" } : null]}
     >
       {children}
-    </Wrapper>
+    </Pressable>
   );
 }
 
