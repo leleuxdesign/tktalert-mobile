@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { describeSubscription } from "../../lib/subscription";
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, StyleSheet, Pressable, Alert, Linking, AppState } from "react-native";
-import { useRouter, Link } from "expo-router";
+import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Bell, AlertCircle, ChevronRight, Car } from "lucide-react-native";
 import { trpc } from "@/lib/trpc";
@@ -119,7 +119,9 @@ export default function DashboardScreen() {
   }, [user?.graceUntil]);
 
   const zonesQuery = trpc.zones.list.useQuery(undefined, { enabled: !!user });
-  const alertsQuery = trpc.alerts.myAlerts.useQuery({ limit: 5 }, { enabled: !!user });
+  // Fetch the same 100 the Alert History screen does: the "Alerts" tile used to
+  // count this list while it was capped at 5, so it could never read above 5.
+  const alertsQuery = trpc.alerts.myAlerts.useQuery({ limit: 100 }, { enabled: !!user });
   const activityQuery = trpc.alerts.activitySummary.useQuery(undefined, { enabled: !!user });
 
   const onRefresh = async () => {
@@ -155,7 +157,9 @@ export default function DashboardScreen() {
       : null;
 
   const zones = zonesQuery.data ?? [];
-  const alerts = alertsQuery.data ?? [];
+  const allAlerts = alertsQuery.data ?? [];
+  const alerts = allAlerts.slice(0, 5);
+  const alertCount = allAlerts.length >= 100 ? "100+" : String(allAlerts.length);
 
   const isActiveStatus = plan.entitled;
   const statusLabel = plan.badge;
@@ -238,7 +242,7 @@ export default function DashboardScreen() {
         <View style={styles.statsRow}>
           <IosStatCard label="Status" value={<Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>} />
           <IosStatCard label="Zones" value={String(zones.length)} />
-          <IosStatCard label="Alerts" value={String(alerts.length)} />
+          <IosStatCard label="Alerts" value={alertCount} />
         </View>
 
         {zones.length > 0 && (
@@ -324,15 +328,15 @@ export default function DashboardScreen() {
               </View>
             )}
             {alerts.length > 0 && (
-              <Link href="/tabs/alerts" asChild>
-                <IosTableRow onPress={() => {}} last>
-                  <IosIconCell gradient={gradients.iconPurple}>
-                    <AlertCircle size={16} color="#fff" />
-                  </IosIconCell>
-                  <IosTableRowLabel>View All Alerts</IosTableRowLabel>
-                  <ChevronRight size={16} color={colors.silver} />
-                </IosTableRow>
-              </Link>
+              // Navigate directly: wrapping the row in <Link asChild> replaced its
+              // row style, so the icon, label and chevron stacked vertically.
+              <IosTableRow onPress={() => router.push("/tabs/alerts")} last>
+                <IosIconCell gradient={gradients.iconPurple}>
+                  <AlertCircle size={16} color="#fff" />
+                </IosIconCell>
+                <IosTableRowLabel>View All Alerts</IosTableRowLabel>
+                <ChevronRight size={16} color={colors.silver} />
+              </IosTableRow>
             )}
           </IosTable>
         </View>
