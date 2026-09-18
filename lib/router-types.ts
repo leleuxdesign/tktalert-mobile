@@ -31,6 +31,13 @@ export type MapAccess = {
   zoneLimit: number | null;
   /** Active zones. May exceed zoneLimit for legacy/lapsed accounts, who keep them all. */
   zoneCount: number;
+  /**
+   * Which alert channels this account gets (Owner ruling 2026-09-18).
+   * free: push only, on `zoneId` (its earliest active zone, or null if none).
+   * paid: all three, and `zoneId` null meaning EVERY zone — so `tier`, never
+   * the null alone, tells the two cases apart. Render via lib/alertAccess.
+   */
+  alertChannels: { push: boolean; email: boolean; sms: boolean; zoneId: number | null };
 };
 /** Zone color keys (tktalert-app shared/zoneColors.ts). Unknown keys render blue. */
 export type ZoneColorKey = "blue" | "green" | "orange" | "purple" | "red" | "teal" | "pink" | "yellow";
@@ -115,9 +122,13 @@ const appRouter = t.router({
     // What this account can use; clients render locks/upsells from it:
     //   { tier: "free" | "paid"; complaintMap: true; ticketMap: boolean;
     //     ticketDataAvailable: boolean; alerts: boolean;
-    //     zoneLimit: number | null; zoneCount: number }
+    //     zoneLimit: number | null; zoneCount: number;
+    //     alertChannels: { push, email, sms, zoneId } }
     access: t.procedure.query((): MapAccess => ({
-      tier: "free", complaintMap: true, ticketMap: false, ticketDataAvailable: false, alerts: false, zoneLimit: 1, zoneCount: 0,
+      tier: "free", complaintMap: true, ticketMap: false, ticketDataAvailable: false, zoneLimit: 1, zoneCount: 0,
+      alertChannels: { push: true, email: false, sms: false, zoneId: null },
+      // DEPRECATED: still means "paid". Use alertChannels / lib/alertAccess.
+      alerts: false,
     })),
     // The caller's own active zones as map pins (free or paid; no input).
     myZones: t.procedure.query((): ZonePin[] => []),

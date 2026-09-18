@@ -159,7 +159,7 @@ export default function DashboardScreen() {
           <View style={styles.bannerWrap}>
             <View style={styles.pausedBanner}>
               <Text style={styles.pausedTitle}>
-                {plan.neverSubscribed ? "🔔 Alerts are off" : "⏸ Alerts paused"}
+                {plan.neverSubscribed ? "🔔 Push alerts only" : "⏸ Text and email alerts paused"}
               </Text>
               {/*
                 A user who has never subscribed must not be told their
@@ -167,23 +167,30 @@ export default function DashboardScreen() {
                 new account sees. `subscribedAt` is null until Stripe reports a
                 completed checkout, which is what separates the two cases.
               */}
+              {/*
+                Owner ruling 2026-09-18: free accounts DO get alerts — push, on
+                one zone. Only text and email alerts, and extra zones, are paid,
+                so this banner must never say alerts are off.
+              */}
               <Text style={styles.pausedBody}>
                 {plan.neverSubscribed ? (
                   <>
-                    Alerts only run on a paid subscription.{" "}
-                    {zones.length > 0
-                      ? `Your ${zones.length} watch zone${zones.length !== 1 ? "s are" : " is"} saved — we'll start watching `
-                      : "Add a watch zone and we'll start watching "}
-                    the moment you subscribe.
+                    You're on the free plan: push alerts on 1 watch zone.{" "}
+                    {zones.length > 1
+                      ? `Your other ${zones.length - 1} zone${zones.length - 1 !== 1 ? "s are" : " is"} saved but silent. `
+                      : zones.length === 0
+                        ? "Add a watch zone and we'll start watching it. "
+                        : ""}
+                    Text and email alerts, and more zones, come with a subscription.
                   </>
                 ) : (
                   <>
-                    Your subscription ended, so we've stopped sending alerts. Nothing has
-                    been deleted —{" "}
+                    Your subscription ended, so text and email alerts stopped. You still get
+                    push alerts on 1 watch zone, and nothing has been deleted —{" "}
                     {zones.length > 0
                       ? `your ${zones.length} watch zone${zones.length !== 1 ? "s are" : " is"} saved and `
                       : "your account and history are intact and "}
-                    alerts resume automatically the moment you renew.
+                    everything resumes the moment you renew.
                   </>
                 )}
               </Text>
@@ -232,7 +239,8 @@ export default function DashboardScreen() {
           <IosCard style={styles.activityCard}>
             <View style={styles.activityHeaderRow}>
               <Text style={styles.activityTitle}>
-                {isPaused ? "⏸ Watching paused" : "👀 TattleTow is watching"}
+                {/* Every account is watched now; only the channels differ. */}
+                👀 TattleTow is watching
               </Text>
               <Pressable onPress={() => setDisclaimerVisible(true)} hitSlop={8} style={styles.disclaimerBtn}>
                 <Car size={14} color={colors.textLight} />

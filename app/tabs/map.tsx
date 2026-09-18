@@ -434,7 +434,7 @@ export default function TattleMapScreen() {
             >
               <Bell size={15} color={colors.blue} />
               <Text style={styles.upsellText} numberOfLines={2}>
-                Get alerts when someone tattles on your block
+                Get text and email alerts, and more watch zones
               </Text>
               {checkoutPending ? (
                 <ActivityIndicator size="small" color={colors.blue} />

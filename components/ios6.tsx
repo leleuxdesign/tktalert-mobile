@@ -353,6 +353,7 @@ export function IosZoneTile({
   gradient = gradients.iconBlue,
   onPress,
   onDelete,
+  note,
 }: {
   label: string;
   street?: string;
@@ -360,6 +361,8 @@ export function IosZoneTile({
   gradient?: readonly string[];
   onPress?: () => void;
   onDelete?: () => void;
+  /** Small status pill on the tile, e.g. "Not alerting". */
+  note?: string;
 }) {
   const showStreetLine = !!street && street !== label;
   return (
@@ -379,6 +382,13 @@ export function IosZoneTile({
           <Text style={styles.zoneTileSublabel} numberOfLines={1}>
             {addressRange}
           </Text>
+          {note ? (
+            <View style={styles.zoneTileNote}>
+              <Text style={styles.zoneTileNoteText} numberOfLines={1}>
+                {note}
+              </Text>
+            </View>
+          ) : null}
         </LinearGradient>
       </Pressable>
       {onDelete ? (
@@ -894,6 +904,16 @@ const styles = StyleSheet.create({
   zoneTileLabel: { fontSize: 15, fontWeight: "700", color: "#fff", fontFamily, marginTop: 6, textAlign: "center" },
   zoneTileStreet: { fontSize: 11, fontWeight: "600", color: "rgba(255,255,255,0.95)", fontFamily, textAlign: "center", marginTop: 1 },
   zoneTileSublabel: { fontSize: 11, color: "rgba(255,255,255,0.85)", fontFamily, textAlign: "center", marginTop: 1 },
+  zoneTileNote: {
+    marginTop: 5,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+    backgroundColor: "rgba(0,0,0,0.28)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.45)",
+  },
+  zoneTileNoteText: { fontSize: 10, fontWeight: "700", color: "#fff", fontFamily },
   zoneTileBadge: {
     position: "absolute",
     top: -6,

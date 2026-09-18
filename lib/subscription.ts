@@ -56,8 +56,10 @@ export function describeSubscription(user: {
   // longer entitle anyone — means alerts are off. The wording is what differs,
   // and it turns on whether this person ever actually subscribed.
   return {
-    badge: neverSubscribed ? "Inactive" : "Paused",
-    planLabel: neverSubscribed ? "No subscription" : "Lapsed",
+    // Owner ruling 2026-09-18: an account without a subscription is a working
+    // free plan (push alerts on one zone), not an inactive one.
+    badge: neverSubscribed ? "Free" : "Paused",
+    planLabel: neverSubscribed ? "Free plan" : "Lapsed",
     entitled: false,
     paused: true,
     neverSubscribed,

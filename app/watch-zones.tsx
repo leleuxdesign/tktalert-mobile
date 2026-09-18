@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { StreetPicker } from "@/components/StreetPicker";
 import { View, Text, ScrollView, Alert, StyleSheet, AppState, Pressable } from "react-native";
 import { useCheckout } from "@/lib/useCheckout";
+import { alertAvailability, ZONE_NOT_ALERTING_LABEL } from "@/lib/alertAccess";
 import { useRouter } from "expo-router";
 import { Navigation, Lock } from "lucide-react-native";
 import { trpc } from "@/lib/trpc";
@@ -137,9 +138,11 @@ export default function WatchZonesScreen() {
   };
 
   const zones = zonesQuery.data ?? [];
-  // Free = no alerts (map.access). Undefined while loading, so no prompt flashes
-  // up for a paid account.
-  const isFree = accessQuery.data?.alerts === false;
+  // What this account's alerts actually cover (Owner ruling 2026-09-18: free =
+  // push on one zone). While access is loading this reports everything as
+  // available, so no "Not alerting" badge flashes onto a paid account's tiles.
+  const alerts = alertAvailability(accessQuery.data);
+  const isFree = alerts.singleZone;
 
   // Owner ruling 2026-09-17: free = 1 watch zone, paid = unlimited. Legacy or
   // lapsed accounts over the limit keep (and can delete) every zone; they just
@@ -166,23 +169,20 @@ export default function WatchZonesScreen() {
         </View>
 
         {/*
-          Owner ruling 2026-09-17: free accounts keep and create zones, but
-          zones only alert on a subscription. This is where zones are made, so
-          it is the one place that must say so. The Dashboard's paused banner
-          already covers the same ground there, so it is not repeated. At the
-          zone limit this merges into the single message in place of the Add
-          button below, so there are never two upsells stacked.
+          Owner rulings 2026-09-17/18: free accounts keep and create zones, and
+          their earliest zone DOES alert — by push. Only text and email alerts,
+          and extra zones, are paid. At the zone limit this merges into the
+          single message in place of the Add button below, so there are never
+          two upsells stacked.
         */}
         {isFree && zones.length > 0 && !atZoneLimit && (
           <View style={styles.upgradeBanner}>
             <Text style={styles.upgradeBody}>
-              Your {zones.length === 1 ? "zone is" : `${zones.length} zones are`} saved, but alerts only
-              run on a subscription.
+              You get push alerts on 1 watch zone. Text and email alerts, and more zones,
+              come with a subscription.
             </Text>
             <Text style={styles.upgradeLink} onPress={startCheckout}>
-              {checkoutPending
-                ? "Opening checkout…"
-                : `Upgrade to get alerts for your ${zones.length === 1 ? "zone" : `${zones.length} zones`} →`}
+              {checkoutPending ? "Opening checkout…" : "Subscribe to get text and email alerts →"}
             </Text>
           </View>
         )}
@@ -196,6 +196,7 @@ export default function WatchZonesScreen() {
                 street={zone.street}
                 addressRange={`${zone.addressMin}–${zone.addressMax}`}
                 gradient={zoneColor(zone.color).gradient}
+                note={alerts.zoneAlerts(zone.id) === false ? ZONE_NOT_ALERTING_LABEL : undefined}
                 onDelete={() => handleDeleteZone(zone.id, zone.label ?? zone.street)}
               />
             ))}
@@ -205,7 +206,7 @@ export default function WatchZonesScreen() {
             <Text style={styles.emptyZonesText}>No watch zones yet</Text>
             <Text style={styles.emptyZonesSubtext}>
               {isFree
-                ? "Add an address below. Zones alert once you subscribe."
+                ? "Add an address below — free accounts get push alerts on 1 watch zone."
                 : "Add an address below to start getting alerts."}
             </Text>
           </IosCard>
@@ -223,17 +224,17 @@ export default function WatchZonesScreen() {
                 Free accounts include {zoneLimit} watch {zoneWord(zoneLimit ?? 1)}.
               </Text>
             </View>
-            {zones.length > 0 && (
+            {isFree && (
               <Text style={styles.upgradeBody}>
-                Your {zones.length === 1 ? "zone is" : `${zones.length} zones are`} saved
-                {isFree ? ", but alerts only run on a subscription." : "."}
+                You get push alerts on {zones.length > 1 ? "the first one" : "it"}. Text and email
+                alerts, and more zones, come with a subscription.
               </Text>
             )}
             <Text style={styles.upgradeLink}>
               {checkoutPending
                 ? "Opening checkout…"
                 : isFree
-                  ? "Subscribe to get alerts and add more zones →"
+                  ? "Subscribe to get text and email alerts and more zones →"
                   : "Subscribe to add more →"}
             </Text>
           </Pressable>

@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
 import { describeSubscription } from "../../lib/subscription";
+import { alertAvailability } from "@/lib/alertAccess";
+import { useCheckout } from "@/lib/useCheckout";
 import { View, Text, ScrollView, Pressable, Switch, Alert, ActivityIndicator, StyleSheet, TextInput, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Linking from "expo-linking";
-import { CreditCard, ExternalLink, MapPin, MessageSquare, ChevronRight, Shield, Mail } from "lucide-react-native";
+import { CreditCard, ExternalLink, MapPin, MessageSquare, ChevronRight, Shield, Mail, Lock } from "lucide-react-native";
 import Constants from "expo-constants";
 import { trpc } from "@/lib/trpc";
 import { colors, gradients, fontFamily, cardShadow } from "@/lib/ios6-theme";
@@ -57,6 +59,10 @@ export default function SettingsScreen() {
   }, []);
 
   const meQuery = trpc.auth.me.useQuery();
+
+  const accessQuery = trpc.map.access.useQuery();
+
+  const { startCheckout, isPending: checkoutPending } = useCheckout();
   const user: User | null = meQuery.data ?? cachedUser;
   const utils = trpc.useUtils();
   const zonesQuery = trpc.zones.list.useQuery(undefined, { enabled: !!user });
@@ -220,6 +226,13 @@ export default function SettingsScreen() {
 
   const zoneCount = zonesQuery.data?.length ?? 0;
   const plan = describeSubscription(user);
+  /*
+    Owner ruling 2026-09-18: free accounts get push alerts on one zone; text and
+    email alerts are paid. An unavailable channel is shown as unavailable WITH
+    the reason — never as a switch turned off — and its stored value (including
+    SMS consent) is left untouched so it resumes on subscribe.
+  */
+  const alerts = alertAvailability(accessQuery.data);
   const supportThread = trpc.support.myThread.useQuery(undefined, { refetchInterval: 60_000 });
   const supportUnread = (supportThread.data as any)?.unread ?? 0;
 
@@ -278,17 +291,23 @@ export default function SettingsScreen() {
               <View style={styles.wideCardBody}>
                 <Text style={styles.wideCardTitle}>Text me parking-complaint alerts</Text>
                 <Text style={styles.wideCardSubtitle}>
-                  {user.smsConsentAt
-                    ? `Opted in ${new Date(user.smsConsentAt).toLocaleString()}${
-                        user.phone ? ` · ${formatPhoneDisplay(user.phone)}` : ""
-                      }`
-                    : `Off — you'll still get email and push alerts.${
-                        user.phone ? "" : " Add a phone number above to turn this on."
-                      }`}
+                  {!alerts.sms
+                    ? alerts.unavailableReason
+                    : user.smsConsentAt
+                      ? `Opted in ${new Date(user.smsConsentAt).toLocaleString()}${
+                          user.phone ? ` · ${formatPhoneDisplay(user.phone)}` : ""
+                        }`
+                      : `Off — you'll still get push alerts.${
+                          user.phone ? "" : " Add a phone number above to turn this on."
+                        }`}
                 </Text>
               </View>
               <View style={styles.wideCardTrailing}>
-                {recordConsent.isPending ? (
+                {!alerts.sms ? (
+                  // Unavailable, not off: the stored consent is left exactly as
+                  // it is and this switch never fires a mutation.
+                  <Lock size={18} color={colors.textFaint} />
+                ) : recordConsent.isPending ? (
                   <ActivityIndicator color={colors.blue} />
                 ) : (
                   <Switch
@@ -330,13 +349,18 @@ export default function SettingsScreen() {
               <View style={styles.wideCardBody}>
                 <Text style={styles.wideCardTitle}>Email me parking-complaint alerts</Text>
                 <Text style={styles.wideCardSubtitle}>
-                  {user.emailAlertsEnabled === false
-                    ? "Off — you'll still get push alerts."
-                    : `On — sent to ${user.email}`}
+                  {!alerts.email
+                    ? alerts.unavailableReason
+                    : user.emailAlertsEnabled === false
+                      ? "Off — you'll still get push alerts."
+                      : `On — sent to ${user.email}`}
                 </Text>
               </View>
               <View style={styles.wideCardTrailing}>
-                {setEmailAlerts.isPending ? (
+                {!alerts.email ? (
+                  // Unavailable, not off: emailAlertsEnabled is left untouched.
+                  <Lock size={18} color={colors.textFaint} />
+                ) : setEmailAlerts.isPending ? (
                   <ActivityIndicator color={colors.blue} />
                 ) : (
                   <Switch
@@ -358,7 +382,7 @@ export default function SettingsScreen() {
             denied receives nothing at all while being charged, concludes the
             product is broken, and is right. Warn rather than block — they may
             be part-way through setting things up. */}
-        {!user.smsConsentAt && user.emailAlertsEnabled === false && (
+        {alerts.email && alerts.sms && !user.smsConsentAt && user.emailAlertsEnabled === false && (
           <View style={[styles.wideCardColumn, { marginBottom: 24, borderLeftWidth: 4, borderLeftColor: colors.orange }]}>
             <Text style={[styles.wideCardTitle, { color: colors.orange }]}>
               You have no way to receive alerts
@@ -516,7 +540,16 @@ export default function SettingsScreen() {
               </View>
               <View style={styles.wideCardBody}>
                 <Text style={styles.wideCardTitle}>Current Plan</Text>
-                <Text style={styles.wideCardSubtitle}>{plan.planLabel}</Text>
+                <Text style={styles.wideCardSubtitle}>
+                  {plan.entitled ? plan.planLabel : `${plan.planLabel} · push alerts on 1 zone`}
+                </Text>
+                {!plan.entitled && (
+                  <Text style={styles.subscribeLink} onPress={startCheckout}>
+                    {checkoutPending
+                      ? "Opening checkout…"
+                      : "Subscribe to get text and email alerts and more zones →"}
+                  </Text>
+                )}
               </View>
               <View style={styles.wideCardTrailing}>
                 {/*
@@ -659,6 +692,7 @@ const styles = StyleSheet.create({
   },
   smsHeaderRow: { flexDirection: "row", alignItems: "center" },
   smsDisclosure: { fontSize: 12, color: colors.textLight, fontFamily, lineHeight: 18, marginTop: 10 },
+  subscribeLink: { fontSize: 13, fontWeight: "700", color: colors.blue, fontFamily, marginTop: 6 },
   smsLink: { fontSize: 12, color: colors.blue, fontFamily, marginTop: 8 },
   wideCardIcon: { marginRight: 16 },
   wideCardBody: { flex: 1, justifyContent: "center", gap: 3 },
