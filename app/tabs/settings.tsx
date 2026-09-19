@@ -3,7 +3,7 @@ import { describeSubscription } from "../../lib/subscription";
 import { alertAvailability } from "@/lib/alertAccess";
 import { useCheckout } from "@/lib/useCheckout";
 import { View, Text, ScrollView, Pressable, Switch, Alert, ActivityIndicator, StyleSheet, TextInput, Platform } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Linking from "expo-linking";
 import { CreditCard, ExternalLink, MapPin, MessageSquare, ChevronRight, Shield, Mail, Lock } from "lucide-react-native";
@@ -44,6 +44,15 @@ const APP_VERSION = String(Constants.expoConfig?.version ?? "unknown");
 
 export default function SettingsScreen() {
   const router = useRouter();
+  /*
+    `focus=phone` arrives from the post-subscribe text-alerts prompt, so the
+    person lands on the field they were sent here to fill in rather than having
+    to find it. `t` is a nonce from the caller: this tab stays mounted, and
+    IosLockedField only reads `startEditing` on mount, so the key has to change
+    for the editor to re-open on a second arrival.
+  */
+  const { focus, t: focusNonce } = useLocalSearchParams<{ focus?: string; t?: string }>();
+  const focusPhone = focus === "phone";
   const [cachedUser, setCachedUser] = useState<User | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [feedbackBody, setFeedbackBody] = useState("");
@@ -263,11 +272,12 @@ export default function SettingsScreen() {
             </IosShadowField>
             <IosShadowField>
               <IosLockedField
+                key={`phone-${focusPhone ? (focusNonce ?? "focus") : "idle"}`}
                 label="Phone (for SMS alerts)"
                 value={user.phone ?? ""}
                 placeholder="(414) 555-0000"
                 keyboardType="phone-pad"
-                startEditing={!user.phone}
+                startEditing={!user.phone || focusPhone}
                 saving={updateProfile.isPending}
                 formatDisplay={formatPhoneDisplay}
                 onSave={(next) => {

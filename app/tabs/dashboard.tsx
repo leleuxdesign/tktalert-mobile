@@ -6,6 +6,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Bell, AlertCircle, ChevronRight, Car } from "lucide-react-native";
 import { trpc } from "@/lib/trpc";
 import { useCheckout } from "@/lib/useCheckout";
+import { useSmsAlertsPrompt } from "@/hooks/useSmsAlertsPrompt";
 import { colors, gradients, fontFamily, zoneColor } from "@/lib/ios6-theme";
 import {
   IosPage,
@@ -28,6 +29,10 @@ interface User {
   role: string;
   subscriptionStatus: string;
   graceUntil?: string | null;
+  /** Used only to word the text-alerts prompt; Settings owns the field itself. */
+  phone?: string | null;
+  /** Non-null = express SMS consent on file. Null on a paid account = no texts. */
+  smsConsentAt?: string | null;
 }
 
 /** Key for the once-per-day throttle on the grace prompt. */
@@ -52,18 +57,50 @@ export default function DashboardScreen() {
   const meQuery = trpc.auth.me.useQuery();
   const user: User | null = meQuery.data ?? cachedUser;
 
+  // Entitlement, as the server sees it. Needed here (not just on the Map and in
+  // Settings) because the free→paid moment is what triggers the text-alerts ask.
+  const accessQuery = trpc.map.access.useQuery();
+
   // App-started Stripe checkout (see lib/useCheckout.ts), shared with the
   // Tattle Map's upgrade prompts.
   const { startCheckout, isPending: checkoutPending } = useCheckout();
 
   // Returning from Stripe in the browser: refresh so a new subscription shows
-  // as active without the customer needing to know to pull down.
+  // as active without the customer needing to know to pull down. `map.access`
+  // rides along — it carries the tier and channel set the text-alerts prompt
+  // triggers on, so refreshing only `me` would leave the app entitled but
+  // still believing SMS is locked.
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "active") meQuery.refetch();
+      if (state === "active") {
+        meQuery.refetch();
+        accessQuery.refetch();
+      }
     });
     return () => subscription.remove();
   }, []);
+
+  /*
+    Someone who subscribes after signing up usually has no SMS consent on file,
+    because a free account could not receive texts and the signup checkbox was
+    correctly left unchecked. Their subscription turns the channel on; without
+    consent the server still refuses every send, so they'd silently get nothing.
+    Ask once, here, at the transition. Consent itself is recorded only in
+    Settings, which carries the filed A2P disclosures.
+  */
+  useSmsAlertsPrompt({
+    access: accessQuery.data,
+    userLoaded: !!meQuery.data,
+    hasConsent: !!meQuery.data?.smsConsentAt,
+    hasPhone: !!meQuery.data?.phone?.trim(),
+    onOpenSettings: () =>
+      router.push({
+        pathname: "/tabs/settings",
+        // `focus` opens the phone field for editing; `t` makes each arrival a
+        // distinct param set, so returning to Settings re-opens it.
+        params: { focus: "phone", t: String(Date.now()) },
+      }),
+  });
 
   // Daily renewal prompt while a failed payment is in its grace window.
   // The server sends push/email/SMS on the same 24h cadence; this covers the
@@ -109,7 +146,13 @@ export default function DashboardScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([zonesQuery.refetch(), alertsQuery.refetch(), meQuery.refetch(), activityQuery.refetch()]);
+    await Promise.all([
+      zonesQuery.refetch(),
+      alertsQuery.refetch(),
+      meQuery.refetch(),
+      activityQuery.refetch(),
+      accessQuery.refetch(),
+    ]);
     setRefreshing(false);
   };
 
