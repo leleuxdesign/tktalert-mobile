@@ -31,10 +31,18 @@ import { Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { MapAccess } from "@/lib/router-types";
 
+/*
+  Both flags are scoped to the account, not the install: a device that has been
+  signed into two accounts must not let one person's dismissal, or one person's
+  tier history, decide anything for the other.
+*/
 /** Set once, forever: the prompt has been seen (or dismissed). */
 export const SMS_PROMPT_SHOWN_KEY = "sms_alerts_prompt_shown";
-/** Last tier we observed for this install: "free" | "paid". */
+/** Last tier we observed for this account: "free" | "paid". */
 export const SMS_PROMPT_TIER_KEY = "sms_alerts_last_tier";
+
+const shownKey = (userId: number) => `${SMS_PROMPT_SHOWN_KEY}:${userId}`;
+const tierKey = (userId: number) => `${SMS_PROMPT_TIER_KEY}:${userId}`;
 
 export const SMS_PROMPT_TITLE = "Want text alerts too?";
 /** No number on file — Settings needs one before the switch can be turned on. */
@@ -51,11 +59,12 @@ export interface SmsAlertsPromptArgs {
   /** map.access() — the authority on tier and which channels are usable. */
   access: MapAccess | undefined;
   /**
-   * True once auth.me has answered from the server this session. The cached
-   * `auth_user` blob is not good enough: if it predates a consent change we
-   * would ask someone who already consented.
+   * `auth.me().id`, or null while it is unknown. Non-null also means auth.me
+   * has answered from the server this session — the cached `auth_user` blob is
+   * not good enough, since if it predates a consent change we would ask
+   * someone who has already consented.
    */
-  userLoaded: boolean;
+  userId: number | null;
   /** `auth.me().smsConsentAt` non-null — express consent already on file. */
   hasConsent: boolean;
   /** `auth.me().phone` non-empty. Changes the wording, not the destination. */
@@ -66,7 +75,7 @@ export interface SmsAlertsPromptArgs {
 
 export function useSmsAlertsPrompt({
   access,
-  userLoaded,
+  userId,
   hasConsent,
   hasPhone,
   onOpenSettings,
@@ -74,13 +83,13 @@ export function useSmsAlertsPrompt({
   useEffect(() => {
     const tier = access?.tier;
     if (tier !== "free" && tier !== "paid") return; // still loading
-    if (!userLoaded) return; // don't judge consent from a stale cache
+    if (userId == null) return; // don't judge consent from a stale cache
 
     const smsAvailable = !!access?.alertChannels?.sms;
     let cancelled = false;
 
     (async () => {
-      const storedTier = await AsyncStorage.getItem(SMS_PROMPT_TIER_KEY);
+      const storedTier = await AsyncStorage.getItem(tierKey(userId));
       if (cancelled) return;
 
       const becamePaid = storedTier === "free" && tier === "paid";
@@ -90,15 +99,15 @@ export function useSmsAlertsPrompt({
       // the ask still happens on the pass where texts really are available.
       if (tier === "paid" && storedTier === "free" && !smsAvailable) return;
 
-      if (storedTier !== tier) await AsyncStorage.setItem(SMS_PROMPT_TIER_KEY, tier);
+      if (storedTier !== tier) await AsyncStorage.setItem(tierKey(userId), tier);
       if (cancelled || !becamePaid || !smsAvailable || hasConsent) return;
 
-      const alreadyShown = await AsyncStorage.getItem(SMS_PROMPT_SHOWN_KEY);
+      const alreadyShown = await AsyncStorage.getItem(shownKey(userId));
       if (cancelled || alreadyShown) return;
 
       // Written first: any dismissal — button, tap-outside, hardware back —
       // must be the last time this is ever shown.
-      await AsyncStorage.setItem(SMS_PROMPT_SHOWN_KEY, new Date().toISOString());
+      await AsyncStorage.setItem(shownKey(userId), new Date().toISOString());
       if (cancelled) return;
 
       Alert.alert(
@@ -120,5 +129,5 @@ export function useSmsAlertsPrompt({
     // `onOpenSettings` is intentionally not a dependency: it is recreated every
     // render, and re-running this effect on every render risks a double prompt.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [access?.tier, access?.alertChannels?.sms, userLoaded, hasConsent, hasPhone]);
+  }, [access?.tier, access?.alertChannels?.sms, userId, hasConsent, hasPhone]);
 }

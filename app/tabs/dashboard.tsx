@@ -90,7 +90,7 @@ export default function DashboardScreen() {
   */
   useSmsAlertsPrompt({
     access: accessQuery.data,
-    userLoaded: !!meQuery.data,
+    userId: meQuery.data?.id ?? null,
     hasConsent: !!meQuery.data?.smsConsentAt,
     hasPhone: !!meQuery.data?.phone?.trim(),
     onOpenSettings: () =>
