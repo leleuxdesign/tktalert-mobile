@@ -81,12 +81,14 @@ export default function DashboardScreen() {
   }, []);
 
   /*
-    Someone who subscribes after signing up usually has no SMS consent on file,
-    because a free account could not receive texts and the signup checkbox was
-    correctly left unchecked. Their subscription turns the channel on; without
-    consent the server still refuses every send, so they'd silently get nothing.
-    Ask once, here, at the transition. Consent itself is recorded only in
-    Settings, which carries the filed A2P disclosures.
+    A subscriber with no SMS consent on file is paying for a channel that will
+    never fire: the server refuses every send without `smsConsentAt`. Most of
+    them are in that state honestly — a free account couldn't receive texts, so
+    the signup checkbox was correctly left unchecked. Ask them once. The rule is
+    a state (paid + SMS available + no consent + never asked), not the moment of
+    purchase, because people subscribe on the WEB and may install the app after,
+    where there is no purchase moment for the app to see. Consent itself is
+    recorded only in Settings, which carries the filed A2P disclosures.
   */
   useSmsAlertsPrompt({
     access: accessQuery.data,

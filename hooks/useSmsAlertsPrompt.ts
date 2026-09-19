@@ -1,48 +1,47 @@
 /**
- * "Want text alerts too?" — the one-time ask that fires the moment texts
- * actually become available to this account.
+ * "Want text alerts too?" — the one-time ask for any paid account that can
+ * receive texts but has no consent on file.
  *
  * Why it exists (Owner-approved for 1.1): SMS consent is collected at signup,
  * but a free account cannot receive texts, so plenty of people sign up with the
- * box unchecked — correctly, since it would have bought them nothing. When they
- * subscribe later, `map.access().alertChannels.sms` flips true and the server
- * would happily text them, except `smsConsentAt` is null, so every SMS send is
+ * box unchecked — correctly, since it would have bought them nothing. Once they
+ * subscribe, `map.access().alertChannels.sms` is true and the server would
+ * happily text them, except `smsConsentAt` is null, so every SMS send is
  * refused (A2P 10DLC / TCPA gate in server/sms.ts). The result is a paying
- * customer silently missing a channel they're paying for. This asks once, at
- * the only moment the ask is meaningful.
+ * customer silently missing a channel they're paying for.
+ *
+ * The rule is a STATE, not an event (White, 2026-09-19): paid + SMS available +
+ * no consent on file + never asked. An earlier version required observing a
+ * free→paid transition in the app, which missed the launch-critical cohort —
+ * people subscribe on the web, so anyone who subscribes first and installs the
+ * app afterwards never transitions anywhere this code can see.
  *
  * What this hook deliberately does NOT do:
  *   - It does not collect consent. There is exactly one place that records
  *     consent (Settings → Text Alerts, with the disclosures filed in the A2P
  *     campaign), and this prompt sends the user there. Paraphrasing the
  *     disclosure here would create a second, unfiled version of it.
- *   - It does not nag. It shows once, ever, per install; dismissing it is
- *     final. The "shown" flag is written BEFORE the alert renders, so an
- *     Android back-button dismissal counts as shown too.
- *
- * The free→paid transition is detected against a tier persisted in
- * AsyncStorage rather than a previous render, so it survives the app being
- * killed while the customer is in the browser paying Stripe. A fresh install by
- * an already-paid user has no stored tier and therefore no transition — correct:
- * we only ask people for whom texts just turned on.
+ *   - It does not nag. The once-per-account "shown" flag is the only thing
+ *     stopping it, so it is written BEFORE the alert renders: dismissal by the
+ *     button, by tapping outside, or by the Android back button all count.
+ *   - It does not fire on unanswered data. Both `auth.me` and `map.access` must
+ *     have answered from the server this session; the cached `auth_user` blob
+ *     is not trusted to say whether consent exists, and no answer at all is not
+ *     the same as "free".
  */
 import { useEffect } from "react";
 import { Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { MapAccess } from "@/lib/router-types";
 
-/*
-  Both flags are scoped to the account, not the install: a device that has been
-  signed into two accounts must not let one person's dismissal, or one person's
-  tier history, decide anything for the other.
-*/
-/** Set once, forever: the prompt has been seen (or dismissed). */
+/**
+ * Set once, forever: the prompt has been seen (or dismissed). Scoped to the
+ * account, not the install — a device that has been signed into two accounts
+ * must not let one person's dismissal silence the other person's ask.
+ */
 export const SMS_PROMPT_SHOWN_KEY = "sms_alerts_prompt_shown";
-/** Last tier we observed for this account: "free" | "paid". */
-export const SMS_PROMPT_TIER_KEY = "sms_alerts_last_tier";
 
 const shownKey = (userId: number) => `${SMS_PROMPT_SHOWN_KEY}:${userId}`;
-const tierKey = (userId: number) => `${SMS_PROMPT_TIER_KEY}:${userId}`;
 
 export const SMS_PROMPT_TITLE = "Want text alerts too?";
 /** No number on file — Settings needs one before the switch can be turned on. */
@@ -81,27 +80,19 @@ export function useSmsAlertsPrompt({
   onOpenSettings,
 }: SmsAlertsPromptArgs) {
   useEffect(() => {
-    const tier = access?.tier;
-    if (tier !== "free" && tier !== "paid") return; // still loading
-    if (userId == null) return; // don't judge consent from a stale cache
+    // `map.access` must have answered: an absent tier is "we don't know yet",
+    // which is not the same as free, and must not consume the one ask.
+    if (access?.tier !== "paid") return;
+    // SMS is the whole point. Paid without it (a channel rollout, or the server
+    // disagreeing with itself) means there is nothing to ask for yet.
+    if (!access?.alertChannels?.sms) return;
+    // Null = auth.me hasn't answered this session; don't judge consent from the
+    // cached blob, and don't ask someone who already consented.
+    if (userId == null || hasConsent) return;
 
-    const smsAvailable = !!access?.alertChannels?.sms;
     let cancelled = false;
 
     (async () => {
-      const storedTier = await AsyncStorage.getItem(tierKey(userId));
-      if (cancelled) return;
-
-      const becamePaid = storedTier === "free" && tier === "paid";
-
-      // Paid but SMS not offered yet (server disagreeing with itself, or a
-      // channel rollout): hold the transition open rather than burning it, so
-      // the ask still happens on the pass where texts really are available.
-      if (tier === "paid" && storedTier === "free" && !smsAvailable) return;
-
-      if (storedTier !== tier) await AsyncStorage.setItem(tierKey(userId), tier);
-      if (cancelled || !becamePaid || !smsAvailable || hasConsent) return;
-
       const alreadyShown = await AsyncStorage.getItem(shownKey(userId));
       if (cancelled || alreadyShown) return;
 
