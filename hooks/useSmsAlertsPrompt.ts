@@ -10,11 +10,11 @@
  * refused (A2P 10DLC / TCPA gate in server/sms.ts). The result is a paying
  * customer silently missing a channel they're paying for.
  *
- * The rule is a STATE, not an event (White, 2026-09-19): paid + SMS available +
- * no consent on file + never asked. An earlier version required observing a
- * free→paid transition in the app, which missed the launch-critical cohort —
- * people subscribe on the web, so anyone who subscribes first and installs the
- * app afterwards never transitions anywhere this code can see.
+ * The rule is a STATE, not an event (White, 2026-09-19): paid, not comped, SMS
+ * available, no consent on file, never asked. An earlier version required
+ * observing a free→paid transition in the app, which missed the launch-critical
+ * cohort — people subscribe on the web, so anyone who subscribes first and
+ * installs the app afterwards never transitions anywhere this code can see.
  *
  * What this hook deliberately does NOT do:
  *   - It does not collect consent. There is exactly one place that records
@@ -64,6 +64,13 @@ export interface SmsAlertsPromptArgs {
    * someone who has already consented.
    */
   userId: number | null;
+  /**
+   * `auth.me().subscriptionStatus === "comped"`. Comped accounts read as paid
+   * but are testers and the store-demo reviewer account (White, 2026-09-19):
+   * nobody in that group should be asked for a phone number, and a prompt in
+   * front of an App Review reviewer is noise at best.
+   */
+  isComped: boolean;
   /** `auth.me().smsConsentAt` non-null — express consent already on file. */
   hasConsent: boolean;
   /** `auth.me().phone` non-empty. Changes the wording, not the destination. */
@@ -75,11 +82,14 @@ export interface SmsAlertsPromptArgs {
 export function useSmsAlertsPrompt({
   access,
   userId,
+  isComped,
   hasConsent,
   hasPhone,
   onOpenSettings,
 }: SmsAlertsPromptArgs) {
   useEffect(() => {
+    // Comped accounts are testers and the reviewer demo login, not customers.
+    if (isComped) return;
     // `map.access` must have answered: an absent tier is "we don't know yet",
     // which is not the same as free, and must not consume the one ask.
     if (access?.tier !== "paid") return;
@@ -120,5 +130,5 @@ export function useSmsAlertsPrompt({
     // `onOpenSettings` is intentionally not a dependency: it is recreated every
     // render, and re-running this effect on every render risks a double prompt.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [access?.tier, access?.alertChannels?.sms, userId, hasConsent, hasPhone]);
+  }, [access?.tier, access?.alertChannels?.sms, userId, isComped, hasConsent, hasPhone]);
 }

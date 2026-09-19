@@ -85,14 +85,17 @@ export default function DashboardScreen() {
     never fire: the server refuses every send without `smsConsentAt`. Most of
     them are in that state honestly — a free account couldn't receive texts, so
     the signup checkbox was correctly left unchecked. Ask them once. The rule is
-    a state (paid + SMS available + no consent + never asked), not the moment of
-    purchase, because people subscribe on the WEB and may install the app after,
-    where there is no purchase moment for the app to see. Consent itself is
-    recorded only in Settings, which carries the filed A2P disclosures.
+    a state (paid, not comped, SMS available, no consent, never asked), not the
+    moment of purchase, because people subscribe on the WEB and may install the
+    app after, where there is no purchase moment for the app to see. Comped
+    accounts are excluded: they read as paid but they are testers and the
+    reviewer demo login, not customers. Consent itself is recorded only in
+    Settings, which carries the filed A2P disclosures.
   */
   useSmsAlertsPrompt({
     access: accessQuery.data,
     userId: meQuery.data?.id ?? null,
+    isComped: meQuery.data?.subscriptionStatus === "comped",
     hasConsent: !!meQuery.data?.smsConsentAt,
     hasPhone: !!meQuery.data?.phone?.trim(),
     onOpenSettings: () =>
