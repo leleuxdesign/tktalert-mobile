@@ -61,10 +61,33 @@ function PushNotificationSetup() {
   const { expoPushToken } = usePushNotifications();
   const meQuery = trpc.auth.me.useQuery(undefined, { retry: false });
   const savePushToken = trpc.auth.savePushToken.useMutation();
+  /*
+    The token is claimed per ACCOUNT, not per app process.
+
+    `savedTokenRef` alone was a process-lifetime "already saved" flag, which was
+    fine while a token could sit on several accounts at once. It cannot any
+    more: the server clears the token from every other account when one claims
+    it (tktalert-app `50f6ea6`, UNIQUE(expoPushToken)), and signing out releases
+    it (`8d58091`). So sign out and back in within one session and the token now
+    belongs to nobody, while this ref still says "saved" — that account gets no
+    push alerts at all until the app is relaunched.
+
+    Pairing the ref with the user it was saved for fixes it: a change of signed-
+    in account (including to signed-out and back) forgets the save and the next
+    sign-in re-claims.
+  */
   const savedTokenRef = useRef<string | null>(null);
+  const savedForUserRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!expoPushToken || !meQuery.data) return;
+    const userId: number | null = meQuery.data?.id ?? null;
+
+    if (savedForUserRef.current !== userId) {
+      savedForUserRef.current = userId;
+      savedTokenRef.current = null;
+    }
+
+    if (!expoPushToken || userId == null) return;
     if (savedTokenRef.current === expoPushToken) return;
     savedTokenRef.current = expoPushToken;
     savePushToken.mutate({ expoPushToken });
