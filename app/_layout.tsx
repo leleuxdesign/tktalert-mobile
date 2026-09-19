@@ -94,7 +94,7 @@ function PushNotificationSetup() {
   }, [expoPushToken, meQuery.data]);
 
   /**
-   * Diagnostic snapshot, sent once per signed-in launch.
+   * Diagnostic snapshot, sent once per signed-in ACCOUNT per launch.
    *
    * The Owner asked for device state on EVERY user, not only those who write
    * in, because the commonest support message is "it didn't alert me" and the
@@ -105,12 +105,18 @@ function PushNotificationSetup() {
    * push is actually usable. No location, no contacts, no advertising
    * identifiers. (Location is requested separately for the map picker and is
    * unrelated to this.)
+   *
+   * Paired with the user id for the same reason as the push-token save above:
+   * a bare once-per-process flag meant a second account signing in during one
+   * session was never profiled at all, so the admin view would show nothing for
+   * exactly the person who had just been helped into the app.
    */
   const reportDevice = trpc.support.reportDevice.useMutation();
-  const reportedRef = useRef(false);
+  const reportedForUserRef = useRef<number | null>(null);
   useEffect(() => {
-    if (!meQuery.data || reportedRef.current) return;
-    reportedRef.current = true;
+    const userId: number | null = meQuery.data?.id ?? null;
+    if (userId == null || reportedForUserRef.current === userId) return;
+    reportedForUserRef.current = userId;
     (async () => {
       let pushPermission = "unavailable";
       try {
