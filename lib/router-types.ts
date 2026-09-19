@@ -77,7 +77,12 @@ const appRouter = t.router({
     // is refused server-side unless `phone` comes with it.
     register: t.procedure.input(passthrough).mutation((): any => ({})),
     login: t.procedure.input(passthrough).mutation((): any => ({})),
-    logout: t.procedure.mutation((): any => ({})),
+    // Input (tktalert-app `8d58091`): { expoPushToken?: string } | undefined.
+    // Sending this device's token releases it precisely — a token the account
+    // no longer holds belongs to another device and is left alone. Omitting it
+    // clears whatever token the account has on file, which is why a WEB
+    // sign-out would otherwise release this phone's token.
+    logout: t.procedure.input(passthrough).mutation((): any => ({})),
     forgotPassword: t.procedure.input(passthrough).mutation((): any => ({})),
     resetPassword: t.procedure.input(passthrough).mutation((): any => ({})),
     updateProfile: t.procedure.input(passthrough).mutation((): any => ({})),

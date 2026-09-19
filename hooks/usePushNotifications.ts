@@ -16,6 +16,26 @@ Notifications.setNotificationHandler({
   }),
 });
 
+/**
+ * The token this process registered, or null if it never got one.
+ *
+ * Sign-out needs it (`auth.logout({ expoPushToken })` releases precisely: a
+ * token the account no longer holds belongs to another device and is left
+ * alone), and sign-out happens on the Settings screen, which must not call
+ * `usePushNotifications` — a second call would register a second set of
+ * notification listeners and re-prompt for permission.
+ *
+ * Deliberately session state, not AsyncStorage: a persisted token can be stale
+ * after a reinstall or a device restore, and releasing a token this device no
+ * longer owns is exactly what the precise release exists to avoid.
+ */
+let currentExpoPushToken: string | null = null;
+
+/** The token registered this session, or null. Safe to call from anywhere. */
+export function getCurrentExpoPushToken(): string | null {
+  return currentExpoPushToken;
+}
+
 export function usePushNotifications() {
   const router = useRouter();
   const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
@@ -26,7 +46,10 @@ export function usePushNotifications() {
 
   useEffect(() => {
     registerForPushNotificationsAsync().then((token) => {
-      if (token) setExpoPushToken(token);
+      if (token) {
+        currentExpoPushToken = token;
+        setExpoPushToken(token);
+      }
     });
 
     notificationListener.current =

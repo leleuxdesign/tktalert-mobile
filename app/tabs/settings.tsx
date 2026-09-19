@@ -9,6 +9,7 @@ import * as Linking from "expo-linking";
 import { CreditCard, ExternalLink, MapPin, MessageSquare, ChevronRight, Shield, Mail, Lock } from "lucide-react-native";
 import Constants from "expo-constants";
 import { trpc } from "@/lib/trpc";
+import { getCurrentExpoPushToken } from "@/hooks/usePushNotifications";
 import { colors, gradients, fontFamily, cardShadow } from "@/lib/ios6-theme";
 import { formatPhoneDisplay } from "@/lib/format";
 import {
@@ -135,7 +136,18 @@ export default function SettingsScreen() {
         style: "destructive",
         onPress: async () => {
           await AsyncStorage.removeItem("auth_user");
-          logoutMutation.mutate(undefined, {
+          /*
+            Hand back this device's token by name. Signing out releases the
+            token (tktalert-app `8d58091`) so a signed-out phone stops buzzing
+            with the previous account's alerts — but WITHOUT a token the server
+            clears whatever the account has on file, so a web sign-out would
+            release this phone's token too. Naming it makes the release precise:
+            if the account no longer holds this token, another device owns it
+            and it is left alone. Null (permission denied, simulator, or
+            registration failed) sends no input and keeps the old behaviour.
+          */
+          const expoPushToken = getCurrentExpoPushToken();
+          logoutMutation.mutate(expoPushToken ? { expoPushToken } : undefined, {
             onSettled: () => {
               utils.auth.me.invalidate();
               router.replace("/auth/login");
