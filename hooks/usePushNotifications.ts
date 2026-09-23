@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
 import Constants from "expo-constants";
+import { logAction } from "@/lib/analytics";
 
 // Configure how notifications appear when the app is in the foreground
 Notifications.setNotificationHandler({
@@ -59,6 +60,7 @@ export function usePushNotifications() {
 
     responseListener.current =
       Notifications.addNotificationResponseReceivedListener(() => {
+        logAction("alert_opened");
         router.push("/tabs/alerts");
       });
 
@@ -83,8 +85,11 @@ async function registerForPushNotificationsAsync(): Promise<string | null> {
   let finalStatus = existingStatus;
 
   if (existingStatus !== "granted") {
+    // The OS permission prompt is only shown when not already granted.
+    logAction("notif_permission_prompt");
     const { status } = await Notifications.requestPermissionsAsync();
     finalStatus = status;
+    logAction("notif_permission_result", status);
   }
 
   if (finalStatus !== "granted") {

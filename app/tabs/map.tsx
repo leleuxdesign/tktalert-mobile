@@ -16,6 +16,7 @@ import { keepPreviousData } from "@tanstack/react-query";
 import { Bell, ChevronRight, LocateFixed, Lock } from "lucide-react-native";
 import { trpc } from "@/lib/trpc";
 import { useCheckout } from "@/lib/useCheckout";
+import { logAction } from "@/lib/analytics";
 import { colors, fontFamily, cardShadow, btnShadow, zoneColor } from "@/lib/ios6-theme";
 import { DEFAULT_MAP_CENTER } from "@/lib/supported-locations";
 import type { HeatBlock, ZonePin } from "@/lib/router-types";
@@ -103,6 +104,11 @@ export default function TattleMapScreen() {
   const access = accessQuery.data;
   const isPaid = access?.tier === "paid";
   const isFree = access?.tier === "free";
+
+  // Explicit allow-listed action in addition to the central screen_view.
+  useEffect(() => {
+    logAction("map_opened");
+  }, []);
 
   // Coming back from Stripe checkout: pick up the new tier without a pull.
   useEffect(() => {
@@ -394,7 +400,10 @@ export default function TattleMapScreen() {
               compact
               segments={RANGE_SEGMENTS}
               value={String(days) as "30" | "90" | "365"}
-              onChange={(k) => setDays(Number(k) as Days)}
+              onChange={(k) => {
+                logAction("map_range_changed", k);
+                setDays(Number(k) as Days);
+              }}
               style={styles.rangeControl}
             />
           </View>

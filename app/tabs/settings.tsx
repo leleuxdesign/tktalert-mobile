@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { describeSubscription } from "../../lib/subscription";
 import { alertAvailability } from "@/lib/alertAccess";
 import { useCheckout } from "@/lib/useCheckout";
+import { logAction, flushAnalytics } from "@/lib/analytics";
 import { View, Text, ScrollView, Pressable, Switch, Alert, ActivityIndicator, StyleSheet, TextInput, Platform } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -135,6 +136,10 @@ export default function SettingsScreen() {
         text: "Sign Out",
         style: "destructive",
         onPress: async () => {
+          // Log + flush BEFORE the session cookie is cleared, so the server can
+          // still stamp userId onto this event.
+          logAction("logout");
+          void flushAnalytics();
           await AsyncStorage.removeItem("auth_user");
           /*
             Hand back this device's token by name. Signing out releases the

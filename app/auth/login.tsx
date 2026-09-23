@@ -4,6 +4,7 @@ import { Link, useRouter, useLocalSearchParams } from "expo-router";
 import { Bell } from "lucide-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { trpc } from "@/lib/trpc";
+import { logAction } from "@/lib/analytics";
 import { colors, gradients, fontFamily } from "@/lib/ios6-theme";
 import {
   IosPage,
@@ -28,6 +29,7 @@ export default function LoginScreen() {
   const loginMutation = trpc.auth.login.useMutation({
     onSuccess: async (data: any) => {
       if (data?.success && data?.user) {
+        logAction("login");
         await AsyncStorage.setItem("auth_user", JSON.stringify(data.user));
         await utils.auth.me.invalidate();
         router.replace("/tabs/dashboard");

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { StreetPicker } from "@/components/StreetPicker";
 import {
   View,
@@ -14,6 +14,7 @@ import * as Linking from "expo-linking";
 import { MapPin, ChevronRight, Check } from "lucide-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { trpc } from "@/lib/trpc";
+import { logAction } from "@/lib/analytics";
 import { colors, gradients, fontFamily } from "@/lib/ios6-theme";
 import {
   IosPage,
@@ -68,6 +69,13 @@ export default function SignupScreen() {
     smsConsentChecked: false,
     smsConsentTimestamp: "",
   });
+
+  // Onboarding funnel: entering the wizard vs. finishing it (see the two logs
+  // below). Screen names alone can't tell an abandoned signup from a completed
+  // one because both leave the auth group afterward.
+  useEffect(() => {
+    logAction("signup_started");
+  }, []);
 
   const registerMutation = trpc.auth.register.useMutation();
   const updateProfile = trpc.auth.updateProfile.useMutation();
@@ -144,6 +152,7 @@ export default function SignupScreen() {
           centerAddress: Number(form.centerAddress),
           label: form.label || undefined,
         });
+        logAction("signup_completed");
         setStep("success");
       }
     } catch (err: any) {

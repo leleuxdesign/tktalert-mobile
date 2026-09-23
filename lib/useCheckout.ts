@@ -1,5 +1,7 @@
-import { Linking } from "react-native";
+import { useEffect, useRef } from "react";
+import { AppState, Linking } from "react-native";
 import { trpc } from "@/lib/trpc";
+import { logAction } from "@/lib/analytics";
 
 export const APP_WEB_URL = "https://app.tattletow.com";
 /** Web checkout: only a fallback now, if the app cannot start its own. */
@@ -15,21 +17,41 @@ export const RENEW_URL = `${APP_WEB_URL}/subscribe`;
  * hands them back to the app instead of leaving them in the web dashboard.
  */
 export function useCheckout() {
+  // Analytics only: true between opening Stripe and the next foreground, so the
+  // instance whose checkout was started (and only that one) logs the return.
+  const awaitingReturnRef = useRef(false);
+
   const checkoutMutation = trpc.stripe.createCheckoutSession.useMutation({
     onSuccess: async (data: any) => {
+      logAction("checkout_opened");
+      awaitingReturnRef.current = true;
       await Linking.openURL(data?.url || RENEW_URL);
     },
     // Fall back to web checkout rather than leaving the button dead.
     onError: () => {
+      logAction("checkout_opened");
+      awaitingReturnRef.current = true;
       Linking.openURL(RENEW_URL);
     },
   });
 
-  const startCheckout = () =>
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active" && awaitingReturnRef.current) {
+        awaitingReturnRef.current = false;
+        logAction("checkout_returned");
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
+  const startCheckout = () => {
+    logAction("subscribe_tapped");
     checkoutMutation.mutate({
       successUrl: `${APP_WEB_URL}/subscribed?source=app`,
       cancelUrl: `${APP_WEB_URL}/subscribed?source=app&cancelled=1`,
     });
+  };
 
   return { startCheckout, isPending: checkoutMutation.isPending };
 }

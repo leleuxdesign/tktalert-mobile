@@ -9,6 +9,7 @@ import { StatusBar } from "expo-status-bar";
 import { View, ActivityIndicator, Platform } from "react-native";
 import { trpc, createTRPCClient } from "@/lib/trpc";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { initAnalytics, useScreenTracking } from "@/lib/analytics";
 import { colors } from "@/lib/ios6-theme";
 
 const queryClient = new QueryClient({
@@ -139,12 +140,26 @@ function PushNotificationSetup() {
   return null;
 }
 
+/**
+ * Analytics (D-12): start the fire-and-forget client once and run the single
+ * central screen_view tracker. No per-screen boilerplate. Renders nothing and
+ * never affects app behavior.
+ */
+function AnalyticsSetup() {
+  useEffect(() => {
+    initAnalytics();
+  }, []);
+  useScreenTracking();
+  return null;
+}
+
 export default function RootLayout() {
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
         <StatusBar style="dark" />
         <PushNotificationSetup />
+        <AnalyticsSetup />
         <AuthGuard>
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="auth" />

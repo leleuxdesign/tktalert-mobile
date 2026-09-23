@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { StreetPicker } from "@/components/StreetPicker";
 import { View, Text, ScrollView, Alert, StyleSheet, AppState, Pressable } from "react-native";
 import { useCheckout } from "@/lib/useCheckout";
+import { logAction } from "@/lib/analytics";
 import { alertAvailability, ZONE_NOT_ALERTING_LABEL } from "@/lib/alertAccess";
 import { useRouter } from "expo-router";
 import { Navigation, Lock } from "lucide-react-native";
@@ -55,6 +56,7 @@ export default function WatchZonesScreen() {
 
   const createZone = trpc.zones.create.useMutation({
     onSuccess: () => {
+      logAction("zone_created");
       utils.zones.list.invalidate();
       utils.map.myZones.invalidate(); // Tattle Map pins
       utils.map.access.invalidate(); // zoneCount
@@ -79,6 +81,7 @@ export default function WatchZonesScreen() {
 
   const deleteZone = trpc.zones.delete.useMutation({
     onSuccess: () => {
+      logAction("zone_delete");
       utils.zones.list.invalidate();
       utils.map.myZones.invalidate(); // Tattle Map pins
       utils.map.access.invalidate(); // zoneCount
@@ -242,7 +245,13 @@ export default function WatchZonesScreen() {
 
         {!atZoneLimit && !showAddZone && (
           <View style={{ marginTop: 16 }}>
-            <IosButton variant="silver" onPress={() => setShowAddZone(true)}>
+            <IosButton
+              variant="silver"
+              onPress={() => {
+                logAction("add_zone_opened");
+                setShowAddZone(true);
+              }}
+            >
               + Add Watch Zone
             </IosButton>
           </View>

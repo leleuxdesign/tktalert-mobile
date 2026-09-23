@@ -201,6 +201,23 @@ const appRouter = t.router({
     createCheckoutSession: t.procedure.input(passthrough).mutation((): any => ({})),
     createBillingPortalSession: t.procedure.input(passthrough).mutation((): { url: string } => ({ url: "" })),
   }),
+  // In-house per-user analytics (D-12, feature/tattle-map). Blade owns the
+  // server side (tktalert-app). His procedures were NOT yet committed on this
+  // branch when the mobile client was wired, so these shapes follow the spec
+  // (FEATURE-SPEC-2026-09-23-user-analytics.md) and are flagged for
+  // reconciliation with his final contract:
+  //   - `track` batches events; the server stamps `userId` from the session
+  //     cookie (never trust a client id), validates `name` against the
+  //     allow-list, and drops unknown names. Session-level fields (`sessionId`,
+  //     `platform`, `appVersion`) are sent once per batch and stamped onto each
+  //     row. Each event is a `screen_view` ({ name, enteredAt, durationMs }) or
+  //     an `action` ({ name, occurredAt, value? }).
+  //   - `config` exposes the kill-switch: `{ enabled }` false => client stops
+  //     capturing; the server also no-ops `track` when off.
+  analytics: t.router({
+    track: t.procedure.input(passthrough).mutation((): any => ({})),
+    config: t.procedure.query((): { enabled: boolean } => ({ enabled: true })),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

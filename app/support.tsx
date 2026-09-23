@@ -4,6 +4,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { trpc } from "@/lib/trpc";
+import { logAction } from "@/lib/analytics";
 import { colors, fontFamily } from "@/lib/ios6-theme";
 import { IosPage, IosNavBar, IosButton } from "@/components/ios6";
 
@@ -23,9 +24,16 @@ export default function SupportScreen() {
   const { data, refetch } = trpc.support.myThread.useQuery(undefined, {
     refetchInterval: 20_000,
   });
+  // Log the open here (not at the caller) so every entry point is covered. No
+  // content is ever logged — just that support was opened / a message was sent.
+  useEffect(() => {
+    logAction("support_opened");
+  }, []);
+
   const markRead = trpc.support.markRead.useMutation();
   const send = trpc.support.send.useMutation({
     onSuccess: async () => {
+      logAction("message_sent");
       setDraft("");
       await utils.support.myThread.invalidate();
       refetch();
