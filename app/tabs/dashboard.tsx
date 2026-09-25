@@ -5,6 +5,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Bell, AlertCircle, ChevronRight, Car } from "lucide-react-native";
 import { trpc } from "@/lib/trpc";
 import { colors, gradients, fontFamily } from "@/lib/ios6-theme";
+import { useShowSubscribeCTA } from "@/lib/storefront";
 import {
   IosPage,
   IosNavBar,
@@ -37,6 +38,9 @@ export default function DashboardScreen() {
   const [cachedUser, setCachedUser] = useState<User | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [disclaimerVisible, setDisclaimerVisible] = useState(false);
+  // Guideline 3.1.1(a): the Stripe checkout link-out may only be shown on the
+  // US App Store storefront. Hidden on a confirmed non-US storefront.
+  const showSubscribeCTA = useShowSubscribeCTA();
 
   useEffect(() => {
     AsyncStorage.getItem("auth_user").then((stored) => {
@@ -70,22 +74,24 @@ export default function DashboardScreen() {
       AsyncStorage.setItem(GRACE_PROMPT_KEY, todayKey);
 
       const daysLeft = Math.max(1, Math.ceil((graceEnd - Date.now()) / 86400000));
+      const buttons: Parameters<typeof Alert.alert>[2] = [{ text: "Later", style: "cancel" }];
+      // Only offer the web-checkout action on the US storefront (3.1.1(a)).
+      if (showSubscribeCTA) {
+        buttons.push({ text: "Renew Now", onPress: () => Linking.openURL(RENEW_URL) });
+      }
       Alert.alert(
         "Payment failed",
         `We couldn't process your payment. Your alerts stay on for ${daysLeft} more ` +
           `day${daysLeft !== 1 ? "s" : ""}, then they'll pause until you renew.\n\n` +
           `Nothing will be deleted — your watch zones stay exactly as they are.`,
-        [
-          { text: "Later", style: "cancel" },
-          { text: "Renew Now", onPress: () => Linking.openURL(RENEW_URL) },
-        ]
+        buttons
       );
     });
 
     return () => {
       cancelled = true;
     };
-  }, [user?.graceUntil]);
+  }, [user?.graceUntil, showSubscribeCTA]);
 
   const zonesQuery = trpc.zones.list.useQuery(undefined, { enabled: !!user });
   const alertsQuery = trpc.alerts.myAlerts.useQuery({ limit: 5 }, { enabled: !!user });
@@ -148,17 +154,18 @@ export default function DashboardScreen() {
                 alerts resume automatically the moment you renew.
               </Text>
               {/*
-                Points at the web app's real checkout. Revisit before the iOS
-                submission in v1.5 — App Store rules on external purchase links
-                are stricter than Play's, and Session 1 deliberately stripped
-                purchase UI from the app for exactly that reason.
+                Web-checkout link-out (default browser). Gated to the US App
+                Store storefront per Guideline 3.1.1(a): shown only where the
+                US external-link allowance applies, hidden on a non-US storefront.
               */}
-              <Text
-                style={styles.pausedLink}
-                onPress={() => Linking.openURL("https://app.tattletow.com/subscribe")}
-              >
-                Renew my subscription →
-              </Text>
+              {showSubscribeCTA && (
+                <Text
+                  style={styles.pausedLink}
+                  onPress={() => Linking.openURL(RENEW_URL)}
+                >
+                  Renew my subscription →
+                </Text>
+              )}
             </View>
           </View>
         )}
@@ -173,9 +180,11 @@ export default function DashboardScreen() {
                 Your alerts are still running. Renew before the {graceDaysLeft} day
                 {graceDaysLeft !== 1 ? "s are" : " is"} up and nothing changes.
               </Text>
-              <Text style={styles.pausedLink} onPress={() => Linking.openURL(RENEW_URL)}>
-                Renew my subscription →
-              </Text>
+              {showSubscribeCTA && (
+                <Text style={styles.pausedLink} onPress={() => Linking.openURL(RENEW_URL)}>
+                  Renew my subscription →
+                </Text>
+              )}
             </View>
           </View>
         )}

@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "net.tattletow.app",
-      "buildNumber": "1",
+      "buildNumber": "3",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "TattleTow uses your location to monitor parking complaints near your registered address.",
         "UIBackgroundModes": [
