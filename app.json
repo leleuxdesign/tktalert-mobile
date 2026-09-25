@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "net.tattletow.app",
-      "buildNumber": "1",
+      "buildNumber": "3",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "TattleTow uses your location only to centre the map when you add a watch zone, so you can find your address quickly. Alerts are based on the address you choose, not on where your phone is.",
         "UIBackgroundModes": [

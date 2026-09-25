@@ -6,6 +6,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Bell, AlertCircle, ChevronRight, Car } from "lucide-react-native";
 import { trpc } from "@/lib/trpc";
 import { colors, gradients, fontFamily } from "@/lib/ios6-theme";
+import { useShowSubscribeCTA } from "@/lib/storefront";
 import {
   IosPage,
   IosNavBar,
@@ -40,6 +41,9 @@ export default function DashboardScreen() {
   const [cachedUser, setCachedUser] = useState<User | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [disclaimerVisible, setDisclaimerVisible] = useState(false);
+  // Guideline 3.1.1(a): the Stripe checkout link-out may only be shown on the
+  // US App Store storefront. Hidden on a confirmed non-US storefront.
+  const showSubscribeCTA = useShowSubscribeCTA();
 
   useEffect(() => {
     AsyncStorage.getItem("auth_user").then((stored) => {
@@ -101,22 +105,24 @@ export default function DashboardScreen() {
       AsyncStorage.setItem(GRACE_PROMPT_KEY, todayKey);
 
       const daysLeft = Math.max(1, Math.ceil((graceEnd - Date.now()) / 86400000));
+      const buttons: Parameters<typeof Alert.alert>[2] = [{ text: "Later", style: "cancel" }];
+      // Guideline 3.1.1(a): only offer the checkout action on the US storefront.
+      if (showSubscribeCTA) {
+        buttons.push({ text: "Renew Now", onPress: startCheckout });
+      }
       Alert.alert(
         "Payment failed",
         `We couldn't process your payment. Your alerts stay on for ${daysLeft} more ` +
           `day${daysLeft !== 1 ? "s" : ""}, then they'll pause until you renew.\n\n` +
           `Nothing will be deleted — your watch zones stay exactly as they are.`,
-        [
-          { text: "Later", style: "cancel" },
-          { text: "Renew Now", onPress: startCheckout },
-        ]
+        buttons
       );
     });
 
     return () => {
       cancelled = true;
     };
-  }, [user?.graceUntil]);
+  }, [user?.graceUntil, showSubscribeCTA]);
 
   const zonesQuery = trpc.zones.list.useQuery(undefined, { enabled: !!user });
   // Fetch the same 100 the Alert History screen does: the "Alerts" tile used to
@@ -209,15 +215,20 @@ export default function DashboardScreen() {
                 launch. Both stores now let US apps link out to external payment
                 (Apple's commission on those sales is still being litigated;
                 Google's US external-links program reports fees from 2026-10-01).
+                Guideline 3.1.1(a): this CTA is gated to the US App Store
+                storefront — shown only where the US external-link allowance
+                applies, hidden on a confirmed non-US storefront.
               */}
-              <Text
-                style={styles.pausedLink}
-                onPress={startCheckout}
-              >
-                {checkoutMutation.isPending
-                  ? "Opening checkout…"
-                  : plan.neverSubscribed ? "Subscribe →" : "Renew my subscription →"}
-              </Text>
+              {showSubscribeCTA && (
+                <Text
+                  style={styles.pausedLink}
+                  onPress={startCheckout}
+                >
+                  {checkoutMutation.isPending
+                    ? "Opening checkout…"
+                    : plan.neverSubscribed ? "Subscribe →" : "Renew my subscription →"}
+                </Text>
+              )}
             </View>
           </View>
         )}
@@ -232,9 +243,11 @@ export default function DashboardScreen() {
                 Your alerts are still running. Renew before the {graceDaysLeft} day
                 {graceDaysLeft !== 1 ? "s are" : " is"} up and nothing changes.
               </Text>
-              <Text style={styles.pausedLink} onPress={startCheckout}>
-                Renew my subscription →
-              </Text>
+              {showSubscribeCTA && (
+                <Text style={styles.pausedLink} onPress={startCheckout}>
+                  Renew my subscription →
+                </Text>
+              )}
             </View>
           </View>
         )}
