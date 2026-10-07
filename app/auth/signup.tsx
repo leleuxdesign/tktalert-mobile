@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { StreetPicker } from "@/components/StreetPicker";
 import {
   View,
@@ -14,6 +14,7 @@ import * as Linking from "expo-linking";
 import { MapPin, ChevronRight, Check } from "lucide-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { trpc } from "@/lib/trpc";
+import { IAP_AVAILABLE, loadOffer } from "@/lib/purchases";
 import { colors, gradients, fontFamily } from "@/lib/ios6-theme";
 import {
   IosPage,
@@ -73,6 +74,22 @@ export default function SignupScreen() {
   const updateProfile = trpc.auth.updateProfile.useMutation();
   const recordConsent = trpc.auth.recordConsent.useMutation();
   const createZone = trpc.zones.create.useMutation();
+
+  // Success-screen copy: alerts only start with a subscription, so the screen
+  // points at the trial. Its length comes from the store, never hardcoded.
+  // undefined = not known (show "free trial" with no number); null = the store
+  // offers this user no trial.
+  const [trialLength, setTrialLength] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (step !== "success" || !IAP_AVAILABLE) return;
+    let active = true;
+    loadOffer()
+      .then((o) => active && o && setTrialLength(o.trialLength))
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [step]);
 
   const updateForm = (field: keyof typeof form, value: string | boolean) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -162,14 +179,16 @@ export default function SignupScreen() {
             <Check size={40} color="#fff" strokeWidth={3} />
           </IosAppIcon>
           <Text style={styles.successTitle}>You're all set!</Text>
+          {/* PLACEHOLDER COPY (Laser, 2026-10-07) — Fran to revise. */}
           <Text style={styles.successBody}>
-            Your watch zone has been created. You'll receive{" "}
-            {form.smsConsentChecked ? "text, push, and email alerts" : "push and email alerts"}{" "}
-            whenever a complaint is filed near{" "}
+            Your account is ready and your watch zone near{" "}
             <Text style={{ color: colors.text, fontWeight: "700" }}>
               {form.centerAddress} {form.street}
-            </Text>
-            .
+            </Text>{" "}
+            is saved.{" "}
+            {trialLength === null
+              ? "Subscribe to begin receiving alerts."
+              : `Start your ${trialLength ? `${trialLength} ` : ""}free trial to begin receiving alerts.`}
           </Text>
           <View style={{ paddingHorizontal: 16, width: "100%" }}>
             <IosButton

@@ -189,6 +189,9 @@ export default function SettingsScreen() {
   };
 
   const deleteAccountMutation = trpc.auth.deleteAccount.useMutation();
+  // Every hook sits above the early return below: a hook that runs only once
+  // `user` loads changes the hook order between renders, which React forbids.
+  const supportThread = trpc.support.myThread.useQuery(undefined, { enabled: !!user, refetchInterval: 60_000 });
 
   /**
    * Two-step destructive confirm. Google Play and the App Store both require
@@ -272,7 +275,6 @@ export default function SettingsScreen() {
 
   const zoneCount = zonesQuery.data?.length ?? 0;
   const plan = describeSubscription(user, storeEntitlement.storePro);
-  const supportThread = trpc.support.myThread.useQuery(undefined, { refetchInterval: 60_000 });
   const supportUnread = (supportThread.data as any)?.unread ?? 0;
 
   // Store subscribers manage billing in the store. A paid account the store
