@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { describeSubscription } from "../../lib/subscription";
-import { View, Text, ScrollView, RefreshControl, ActivityIndicator, StyleSheet, Pressable, Alert, Linking, AppState } from "react-native";
+import { View, Text, ScrollView, RefreshControl, ActivityIndicator, StyleSheet, Pressable, Alert, Linking, AppState, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Bell, AlertCircle, ChevronRight, Car } from "lucide-react-native";
@@ -32,6 +32,13 @@ interface User {
 const APP_WEB_URL = "https://app.tattletow.com";
 /** Web checkout: only a fallback now, if the app cannot start its own. */
 const RENEW_URL = `${APP_WEB_URL}/subscribe`;
+/**
+ * Android hides every purchase entry point until Play Billing ships (Google Play
+ * payments policy). Existing subscribers and comped accounts keep full access;
+ * only the buttons that start a purchase are replaced with neutral text.
+ */
+const HIDE_PURCHASE = Platform.OS === "android";
+const PURCHASE_HIDDEN_TEXT = "Subscriptions are coming to the app in an upcoming update.";
 /** Key for the once-per-day throttle on the grace prompt. */
 const GRACE_PROMPT_KEY = "grace_prompt_last_shown";
 
@@ -106,10 +113,12 @@ export default function DashboardScreen() {
         `We couldn't process your payment. Your alerts stay on for ${daysLeft} more ` +
           `day${daysLeft !== 1 ? "s" : ""}, then they'll pause until you renew.\n\n` +
           `Nothing will be deleted — your watch zones stay exactly as they are.`,
-        [
-          { text: "Later", style: "cancel" },
-          { text: "Renew Now", onPress: startCheckout },
-        ]
+        HIDE_PURCHASE
+          ? [{ text: "OK", style: "cancel" }]
+          : [
+              { text: "Later", style: "cancel" },
+              { text: "Renew Now", onPress: startCheckout },
+            ]
       );
     });
 
@@ -210,14 +219,18 @@ export default function DashboardScreen() {
                 (Apple's commission on those sales is still being litigated;
                 Google's US external-links program reports fees from 2026-10-01).
               */}
-              <Text
-                style={styles.pausedLink}
-                onPress={startCheckout}
-              >
-                {checkoutMutation.isPending
-                  ? "Opening checkout…"
-                  : plan.neverSubscribed ? "Subscribe →" : "Renew my subscription →"}
-              </Text>
+              {HIDE_PURCHASE ? (
+                <Text style={styles.pausedBody}>{PURCHASE_HIDDEN_TEXT}</Text>
+              ) : (
+                <Text
+                  style={styles.pausedLink}
+                  onPress={startCheckout}
+                >
+                  {checkoutMutation.isPending
+                    ? "Opening checkout…"
+                    : plan.neverSubscribed ? "Subscribe →" : "Renew my subscription →"}
+                </Text>
+              )}
             </View>
           </View>
         )}
@@ -232,9 +245,13 @@ export default function DashboardScreen() {
                 Your alerts are still running. Renew before the {graceDaysLeft} day
                 {graceDaysLeft !== 1 ? "s are" : " is"} up and nothing changes.
               </Text>
-              <Text style={styles.pausedLink} onPress={startCheckout}>
-                Renew my subscription →
-              </Text>
+              {HIDE_PURCHASE ? (
+                <Text style={styles.graceBody}>{PURCHASE_HIDDEN_TEXT}</Text>
+              ) : (
+                <Text style={styles.pausedLink} onPress={startCheckout}>
+                  Renew my subscription →
+                </Text>
+              )}
             </View>
           </View>
         )}

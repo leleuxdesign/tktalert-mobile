@@ -531,7 +531,17 @@ export default function SettingsScreen() {
                 </IosBadge>
               </View>
             </View>
-            {hasStripeSubscription && (
+            {/*
+              Android: the Stripe customer portal is hidden until Play Billing
+              ships (it can also start a purchase). Subscribers reach the Owner
+              through the Support row above instead.
+            */}
+            {hasStripeSubscription && Platform.OS === "android" && (
+              <Text style={styles.smsDisclosure}>
+                To manage an existing subscription, contact support from Settings.
+              </Text>
+            )}
+            {hasStripeSubscription && Platform.OS !== "android" && (
               <Pressable
                 onPress={() =>
                   billingPortalMutation.mutate({
