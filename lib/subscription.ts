@@ -33,11 +33,37 @@ export function describeSubscription(
   user: {
     subscriptionStatus?: string | null;
     subscribedAt?: string | Date | null;
+    /** Server's single answer (IAP-CONTRACT.md §3). Absent on a pre-IAP server. */
+    entitled?: boolean | null;
+    isComped?: boolean | null;
+    billingSource?: string | null;
   },
   storePro = false
 ): SubscriptionView {
   const status = (user.subscriptionStatus ?? "").toLowerCase();
-  const neverSubscribed = !user.subscribedAt;
+  const neverSubscribed = !user.subscribedAt && !user.billingSource;
+
+  // IAP-CONTRACT.md §2.4: gate on `entitled`, not the status enum, whenever the
+  // server sends it. The enum mapping below is the fallback for an older server.
+  if (typeof user.entitled === "boolean") {
+    const comped = !!user.isComped || status === "comped";
+    if (user.entitled || storePro) {
+      return {
+        badge: "Active",
+        planLabel: comped ? "Comped (Free)" : "Active Subscription",
+        entitled: true,
+        paused: false,
+        neverSubscribed,
+      };
+    }
+    return {
+      badge: neverSubscribed ? "Inactive" : "Paused",
+      planLabel: neverSubscribed ? "No subscription" : "Lapsed",
+      entitled: false,
+      paused: true,
+      neverSubscribed,
+    };
+  }
 
   if (status === "comped") {
     return {

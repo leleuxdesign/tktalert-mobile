@@ -200,7 +200,19 @@ export async function loadOffer(): Promise<PaywallOffer | null> {
   };
 }
 
-export type PurchaseOutcome = "success" | "cancelled" | "pending" | "not-entitled";
+export type PurchaseOutcome = "success" | "cancelled" | "pending" | "not-entitled" | "other-account";
+
+/**
+ * Restore behaviour is "keep with original App User ID" (IAP-CONTRACT.md §1):
+ * a store subscription that belongs to a different TattleTow account errors
+ * instead of moving. Don't retry it.
+ */
+function isOtherAccountError(e: any): boolean {
+  return (
+    e?.code === PURCHASES_ERROR_CODE.RECEIPT_ALREADY_IN_USE_ERROR ||
+    e?.code === PURCHASES_ERROR_CODE.RECEIPT_IN_USE_BY_OTHER_SUBSCRIBER_ERROR
+  );
+}
 
 export async function purchase(pkg: PurchasesPackage): Promise<PurchaseOutcome> {
   try {
@@ -210,16 +222,45 @@ export async function purchase(pkg: PurchasesPackage): Promise<PurchaseOutcome> 
   } catch (e: any) {
     if (e?.userCancelled || e?.code === PURCHASES_ERROR_CODE.PURCHASE_CANCELLED_ERROR) return "cancelled";
     if (e?.code === PURCHASES_ERROR_CODE.PAYMENT_PENDING_ERROR) return "pending";
+    if (isOtherAccountError(e)) return "other-account";
     throw e;
   }
 }
 
-/** Restore store purchases onto the signed-in account. True when "pro" is now active. */
-export async function restore(): Promise<boolean> {
-  if (!configured) return false;
-  const info = await Purchases.restorePurchases();
-  applyCustomerInfo(info);
-  return hasPro(info);
+export type RestoreOutcome = "restored" | "none" | "other-account";
+
+/** Restore store purchases onto the signed-in account. */
+export async function restore(): Promise<RestoreOutcome> {
+  if (!configured) return "none";
+  try {
+    const info = await Purchases.restorePurchases();
+    applyCustomerInfo(info);
+    return hasPro(info) ? "restored" : "none";
+  } catch (e) {
+    if (isOtherAccountError(e)) return "other-account";
+    throw e;
+  }
+}
+
+/**
+ * IAP-CONTRACT.md §2.5: the server learns of a purchase from the RevenueCat
+ * webhook, usually within seconds. Re-read `auth.me` every 2 s for up to ~20 s
+ * until it reports `entitled`. Fire-and-forget; the UI is already unlocked from
+ * CustomerInfo.
+ */
+export function pollServerEntitlement(refetchMe: () => Promise<{ entitled?: boolean } | null | undefined>) {
+  let tries = 0;
+  const tick = async () => {
+    tries += 1;
+    try {
+      const me = await refetchMe();
+      if (me?.entitled === true) return;
+    } catch {
+      // keep trying
+    }
+    if (tries < 10) setTimeout(tick, 2000);
+  };
+  setTimeout(tick, 2000);
 }
 
 const STORE_SUBSCRIPTIONS_URL =

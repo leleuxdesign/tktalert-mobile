@@ -4,7 +4,7 @@ import { useRouter } from "expo-router";
 import { trpc } from "@/lib/trpc";
 import { colors, fontFamily } from "@/lib/ios6-theme";
 import { IosPage, IosNavBar, IosButton, IosCard } from "@/components/ios6";
-import { IAP_AVAILABLE, loadOffer, purchase, restore, type PaywallOffer } from "@/lib/purchases";
+import { IAP_AVAILABLE, loadOffer, pollServerEntitlement, purchase, restore, type PaywallOffer } from "@/lib/purchases";
 
 /**
  * Subscription paywall (Owner ruling D-13; Apple Guideline 3.1.2 / Schedule 2).
@@ -63,6 +63,9 @@ const COPY = {
   notYetCredited:
     "Your purchase went through but hasn't reached your account yet. Pull down on the dashboard in a minute, or message us from Support in Settings.",
   storeError: "Something went wrong. Check your connection and try again.",
+  // Fran §4, without the email address while support@ vs help@ is open (Fran decision 2).
+  otherAccount:
+    "This subscription is linked to a different TattleTow account. Sign in with that email, or message us from Support in Settings.",
 };
 
 export default function PaywallScreen() {
@@ -91,6 +94,7 @@ export default function PaywallScreen() {
       // Server is the source of truth (RevenueCat webhook); refresh it now and
       // rely on the optimistic store entitlement until the webhook lands.
       await utils.auth.me.invalidate();
+      pollServerEntitlement(() => utils.auth.me.fetch(undefined, { staleTime: 0 }));
       Alert.alert("TattleTow", message, [{ text: "OK", onPress: () => router.back() }]);
     },
     [utils, router]
@@ -104,6 +108,7 @@ export default function PaywallScreen() {
       if (outcome === "success") await finishUnlocked(offer.trialLength ? COPY.trialStarted : COPY.subscribed);
       else if (outcome === "pending") Alert.alert("TattleTow", COPY.pending);
       else if (outcome === "not-entitled") Alert.alert("TattleTow", COPY.notYetCredited);
+      else if (outcome === "other-account") Alert.alert("TattleTow", COPY.otherAccount);
       // "cancelled": no message; leave them on the paywall.
     } catch {
       Alert.alert("TattleTow", COPY.storeError);
@@ -115,7 +120,9 @@ export default function PaywallScreen() {
   const onRestore = async () => {
     setBusy("restore");
     try {
-      if (await restore()) await finishUnlocked(COPY.restored);
+      const outcome = await restore();
+      if (outcome === "restored") await finishUnlocked(COPY.restored);
+      else if (outcome === "other-account") Alert.alert("TattleTow", COPY.otherAccount);
       else Alert.alert("TattleTow", COPY.restoreNone);
     } catch {
       Alert.alert("TattleTow", COPY.storeError);

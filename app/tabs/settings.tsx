@@ -14,6 +14,7 @@ import {
   STORE_NAME,
   logOutPurchases,
   openManageSubscriptions,
+  pollServerEntitlement,
   restore,
   useStoreEntitlement,
 } from "@/lib/purchases";
@@ -40,6 +41,12 @@ interface User {
   emailAlertsEnabled?: boolean | null;
   isComped?: boolean | null;
   subscriptionStatus: string;
+  // IAP-CONTRACT.md §3 (absent until the IAP server is deployed).
+  entitled?: boolean;
+  billingSource?: "stripe" | "apple" | "google" | "comp" | null;
+  trialEndsAt?: string | null;
+  entitlementExpiresAt?: string | null;
+  iapWillRenew?: boolean | null;
 }
 
 /** The public program-details page the A2P campaign points at. */
@@ -155,15 +162,27 @@ export default function SettingsScreen() {
   const handleRestore = async () => {
     setRestoring(true);
     try {
-      const ok = await restore();
-      if (ok) {
+      // Fran, COPY-IAP-LAUNCH.md §4 result messages.
+      const outcome = await restore();
+      if (outcome === "restored") {
         await utils.auth.me.invalidate();
-        Alert.alert("Purchases restored", "Your subscription is active on this account.");
+        pollServerEntitlement(() => utils.auth.me.fetch(undefined, { staleTime: 0 }));
+        Alert.alert("TattleTow", "Your subscription is restored. Alerts are on.");
+      } else if (outcome === "other-account") {
+        Alert.alert(
+          "TattleTow",
+          "This subscription is linked to a different TattleTow account. Sign in with that email, or message us from Support above."
+        );
       } else {
-        Alert.alert("Nothing to restore", `No active TattleTow subscription was found on your ${STORE_NAME} account.`);
+        Alert.alert(
+          "TattleTow",
+          Platform.OS === "ios"
+            ? "We couldn't find a TattleTow subscription on this Apple Account."
+            : "We couldn't find a TattleTow subscription on this Google account."
+        );
       }
-    } catch (e: any) {
-      Alert.alert("Restore failed", e?.message || "Something went wrong. Please try again.");
+    } catch {
+      Alert.alert("TattleTow", "Something went wrong. Check your connection and try again.");
     } finally {
       setRestoring(false);
     }
@@ -198,11 +217,37 @@ export default function SettingsScreen() {
                   deleteAccountMutation.mutate(
                     { confirm: "DELETE" },
                     {
-                      onSuccess: async () => {
-                        await AsyncStorage.removeItem("auth_user");
-                        await logOutPurchases();
-                        await utils.auth.me.invalidate();
-                        router.replace("/auth/login");
+                      onSuccess: async (data: any) => {
+                        const finish = async () => {
+                          await AsyncStorage.removeItem("auth_user");
+                          await logOutPurchases();
+                          await utils.auth.me.invalidate();
+                          router.replace("/auth/login");
+                        };
+                        // IAP-CONTRACT.md §2.9 / Apple 5.1.1(v): the server cannot
+                        // cancel a store subscription, so say so and offer the
+                        // store's manage page before leaving.
+                        const store = data?.storeSubscription as "apple" | "google" | null | undefined;
+                        if (store) {
+                          const name = store === "apple" ? "App Store" : "Google Play";
+                          Alert.alert(
+                            "Your subscription is still active",
+                            `Your account is deleted, but this does not cancel your ${name} subscription. ` +
+                              `To stop being charged, cancel it in your ${name} subscriptions.`,
+                            [
+                              { text: "Done", style: "cancel", onPress: finish },
+                              {
+                                text: "Manage subscription",
+                                onPress: async () => {
+                                  await openManageSubscriptions().catch(() => {});
+                                  await finish();
+                                },
+                              },
+                            ]
+                          );
+                          return;
+                        }
+                        await finish();
                       },
                       onError: (err: any) =>
                         Alert.alert("Error", err.message || "Could not delete your account."),
@@ -232,21 +277,38 @@ export default function SettingsScreen() {
 
   // Store subscribers manage billing in the store. A paid account the store
   // does not know about (bought before in-app billing) is handled by support.
-  const isComped = user.subscriptionStatus === "comped";
-  const isStoreSubscriber = storeEntitlement.storePro;
-  const isOffStoreSubscriber =
-    !isComped && !isStoreSubscriber && storeEntitlement.loaded && plan.entitled;
+  // Prefer the server's billing fields (IAP-CONTRACT.md §3); fall back to the
+  // store's own view when talking to a pre-IAP server.
+  const hasServerBilling = user.billingSource !== undefined;
+  const isComped = !!user.isComped || user.subscriptionStatus === "comped";
+  const isStoreSubscriber = hasServerBilling
+    ? (user.billingSource === "apple" || user.billingSource === "google") && plan.entitled
+    : storeEntitlement.storePro;
+  const isOffStoreSubscriber = hasServerBilling
+    ? user.billingSource === "stripe" && plan.entitled && !isComped
+    : !isComped && !isStoreSubscriber && storeEntitlement.loaded && plan.entitled;
+  const trialEndsAt = hasServerBilling
+    ? user.trialEndsAt && new Date(user.trialEndsAt).getTime() > Date.now()
+      ? user.trialEndsAt
+      : null
+    : storeEntitlement.periodType === "TRIAL"
+      ? storeEntitlement.expirationDate
+      : null;
+  const periodEndsAt = hasServerBilling ? (user.entitlementExpiresAt ?? null) : storeEntitlement.expirationDate;
+  const willRenew = hasServerBilling ? user.iapWillRenew !== false : storeEntitlement.willRenew;
   // Fran, COPY-IAP-LAUNCH.md §4 "Settings, subscription row".
   const fmtDate = (iso: string | null) =>
     iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "";
+  /** "Active · renews Nov 3, 2026", or just "Active" when no date is known. */
+  const dated = (label: string, verb: string, iso: string | null) => (iso ? `${label} · ${verb} ${fmtDate(iso)}` : label);
   const planLine = isComped
     ? "Comped"
     : isStoreSubscriber
-      ? storeEntitlement.periodType === "TRIAL"
-        ? `Free trial · ends ${fmtDate(storeEntitlement.expirationDate)}`
-        : storeEntitlement.willRenew
-          ? `Active · renews ${fmtDate(storeEntitlement.expirationDate)}`
-          : `Active · ends ${fmtDate(storeEntitlement.expirationDate)}`
+      ? trialEndsAt && willRenew
+        ? dated("Free trial", "ends", trialEndsAt)
+        : willRenew
+          ? dated("Active", "renews", periodEndsAt)
+          : dated("Active", "ends", periodEndsAt)
       : isOffStoreSubscriber
         ? "Paid on our website"
         : plan.planLabel;
