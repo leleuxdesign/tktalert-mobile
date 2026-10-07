@@ -182,7 +182,7 @@ export default function SettingsScreen() {
       "Delete Account",
       "This permanently deletes your account, watch zones, and alert history. This cannot be undone.\n\n" +
         `Deleting your account does not cancel a subscription bought through ${STORE_NAME}. ` +
-        "Cancel it first in Settings → Manage Subscription.",
+        "Cancel it first in Settings → Manage subscription.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -236,6 +236,20 @@ export default function SettingsScreen() {
   const isStoreSubscriber = storeEntitlement.storePro;
   const isOffStoreSubscriber =
     !isComped && !isStoreSubscriber && storeEntitlement.loaded && plan.entitled;
+  // Fran, COPY-IAP-LAUNCH.md §4 "Settings, subscription row".
+  const fmtDate = (iso: string | null) =>
+    iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "";
+  const planLine = isComped
+    ? "Comped"
+    : isStoreSubscriber
+      ? storeEntitlement.periodType === "TRIAL"
+        ? `Free trial · ends ${fmtDate(storeEntitlement.expirationDate)}`
+        : storeEntitlement.willRenew
+          ? `Active · renews ${fmtDate(storeEntitlement.expirationDate)}`
+          : `Active · ends ${fmtDate(storeEntitlement.expirationDate)}`
+      : isOffStoreSubscriber
+        ? "Paid on our website"
+        : plan.planLabel;
 
   return (
     <IosPage>
@@ -525,7 +539,7 @@ export default function SettingsScreen() {
               </View>
               <View style={styles.wideCardBody}>
                 <Text style={styles.wideCardTitle}>Current Plan</Text>
-                <Text style={styles.wideCardSubtitle}>{plan.planLabel}</Text>
+                <Text style={styles.wideCardSubtitle}>{planLine}</Text>
               </View>
               <View style={styles.wideCardTrailing}>
                 {/*
@@ -554,8 +568,8 @@ export default function SettingsScreen() {
               <ActionRow
                 icon={<ExternalLink size={18} color="#fff" />}
                 gradient={gradients.iconBlue}
-                title="Manage Subscription"
-                subtitle={`Cancel or change billing in ${STORE_NAME}`}
+                title="Manage subscription"
+                subtitle={`Opens your ${STORE_NAME} subscriptions.`}
                 onPress={handleManageSubscription}
               />
             )}

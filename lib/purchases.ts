@@ -40,8 +40,17 @@ export const IAP_AVAILABLE = !!API_KEY && API_KEY.trim().length > 0;
 
 // ─── Tiny store for the optimistic entitlement ───────────────────────────────
 
-type State = { loaded: boolean; storePro: boolean };
-let state: State = { loaded: false, storePro: false };
+type State = {
+  loaded: boolean;
+  storePro: boolean;
+  /** "TRIAL" | "INTRO" | "NORMAL" … from the store, when "pro" is active. */
+  periodType: string | null;
+  /** ISO date the current period (or trial) ends. */
+  expirationDate: string | null;
+  willRenew: boolean;
+};
+const EMPTY: State = { loaded: false, storePro: false, periodType: null, expirationDate: null, willRenew: false };
+let state: State = EMPTY;
 const listeners = new Set<() => void>();
 function setState(next: State) {
   state = next;
@@ -62,7 +71,14 @@ export function hasPro(info: CustomerInfo | null | undefined): boolean {
 }
 
 function applyCustomerInfo(info: CustomerInfo) {
-  setState({ loaded: true, storePro: hasPro(info) });
+  const ent = info?.entitlements?.active?.[ENTITLEMENT_ID];
+  setState({
+    loaded: true,
+    storePro: !!ent,
+    periodType: ent?.periodType ?? null,
+    expirationDate: ent?.expirationDate ?? null,
+    willRenew: !!ent?.willRenew,
+  });
 }
 
 // ─── Lifecycle ───────────────────────────────────────────────────────────────
@@ -104,7 +120,7 @@ export async function logInPurchases(userId: number | string): Promise<void> {
 /** Forget the user on sign-out / account deletion. Safe to call repeatedly. */
 export async function logOutPurchases(): Promise<void> {
   currentUserId = null;
-  setState({ loaded: false, storePro: false });
+  setState(EMPTY);
   if (!configured) return;
   try {
     if (!(await Purchases.isAnonymous())) await Purchases.logOut();
@@ -121,13 +137,15 @@ export type PaywallOffer = {
   priceString: string;
   /** e.g. "month" — from the product's billing period. */
   periodLabel: string;
-  /** e.g. "14-day free trial", or null when there is none / the user is not eligible. */
-  trialLabel: string | null;
+  /** e.g. "14-day", or null when there is no trial / the user is not eligible. */
+  trialLength: string | null;
 };
 
-function unitWord(unit: string, n: number): string {
-  const u = unit.toLowerCase();
-  return n === 1 ? u : `${u}s`;
+/** "14-day" / "1-month". Weeks read as days, matching the store copy ("14-day"). */
+function lengthLabel(n: number, unit: string): string {
+  const u = unit.toUpperCase();
+  if (u === "WEEK") return `${n * 7}-day`;
+  return `${n}-${u.toLowerCase()}`;
 }
 
 /** ISO 8601 "P1M" / "P1Y" / "P1W" → "month" / "year" / "week". */
@@ -143,15 +161,11 @@ function trialFromProduct(pkg: PurchasesPackage): string | null {
   const p = pkg.product;
   // Google Play: the default option carries the free phase only when eligible.
   const free = p.defaultOption?.freePhase;
-  if (free) {
-    const n = free.billingPeriod.value;
-    return `${n}-${unitWord(free.billingPeriod.unit, 1)} free trial`;
-  }
+  if (free) return lengthLabel(free.billingPeriod.value, free.billingPeriod.unit);
   // App Store: introductory offer with a zero price is a free trial.
   const intro = p.introPrice;
   if (intro && intro.price === 0) {
-    const n = intro.periodNumberOfUnits * Math.max(1, intro.cycles);
-    return `${n}-${unitWord(intro.periodUnit, 1)} free trial`;
+    return lengthLabel(intro.periodNumberOfUnits * Math.max(1, intro.cycles), intro.periodUnit);
   }
   return null;
 }
@@ -165,13 +179,13 @@ export async function loadOffer(): Promise<PaywallOffer | null> {
   const pkg = offering?.monthly ?? offering?.availablePackages?.[0];
   if (!pkg) return null;
 
-  let trialLabel = trialFromProduct(pkg);
+  let trialLength = trialFromProduct(pkg);
   // Apple shows the intro offer to everyone; only eligible users get it.
-  if (trialLabel && Platform.OS === "ios") {
+  if (trialLength && Platform.OS === "ios") {
     try {
       const elig = await Purchases.checkTrialOrIntroductoryPriceEligibility([pkg.product.identifier]);
       if (elig[pkg.product.identifier]?.status === INTRO_ELIGIBILITY_STATUS.INTRO_ELIGIBILITY_STATUS_INELIGIBLE) {
-        trialLabel = null;
+        trialLength = null;
       }
     } catch {
       // Unknown eligibility: keep the store's offer text; Apple's sheet is final.
@@ -182,7 +196,7 @@ export async function loadOffer(): Promise<PaywallOffer | null> {
     pkg,
     priceString: pkg.product.priceString,
     periodLabel: periodFromIso(pkg.product.subscriptionPeriod),
-    trialLabel,
+    trialLength,
   };
 }
 
