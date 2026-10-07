@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
 import { describeSubscription } from "../../lib/subscription";
-import { View, Text, ScrollView, RefreshControl, ActivityIndicator, StyleSheet, Pressable, Alert, Linking, AppState } from "react-native";
+import { View, Text, ScrollView, RefreshControl, ActivityIndicator, StyleSheet, Pressable, Alert, AppState } from "react-native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Bell, AlertCircle, ChevronRight, Car } from "lucide-react-native";
 import { trpc } from "@/lib/trpc";
 import { colors, gradients, fontFamily } from "@/lib/ios6-theme";
-import { useShowSubscribeCTA } from "@/lib/storefront";
+import { openManageSubscriptions, useStoreEntitlement } from "@/lib/purchases";
 import {
   IosPage,
   IosNavBar,
@@ -30,9 +30,6 @@ interface User {
   graceUntil?: string | null;
 }
 
-const APP_WEB_URL = "https://app.tattletow.com";
-/** Web checkout: only a fallback now, if the app cannot start its own. */
-const RENEW_URL = `${APP_WEB_URL}/subscribe`;
 /** Key for the once-per-day throttle on the grace prompt. */
 const GRACE_PROMPT_KEY = "grace_prompt_last_shown";
 
@@ -41,9 +38,9 @@ export default function DashboardScreen() {
   const [cachedUser, setCachedUser] = useState<User | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [disclaimerVisible, setDisclaimerVisible] = useState(false);
-  // Guideline 3.1.1(a): the Stripe checkout link-out may only be shown on the
-  // US App Store storefront. Hidden on a confirmed non-US storefront.
-  const showSubscribeCTA = useShowSubscribeCTA();
+  // Optimistic unlock between a store purchase and the RevenueCat webhook
+  // reaching the server (D-13). The server stays the source of truth.
+  const storeEntitlement = useStoreEntitlement();
 
   useEffect(() => {
     AsyncStorage.getItem("auth_user").then((stored) => {
@@ -58,27 +55,15 @@ export default function DashboardScreen() {
   const meQuery = trpc.auth.me.useQuery();
   const user: User | null = meQuery.data ?? cachedUser;
 
-  // Checkout starts from the app's own session: the server creates the Stripe
-  // session for this signed-in account, so the customer is not sent to the web
-  // to sign in a second time. Stripe then returns them to /subscribed, which
-  // hands them back to the app instead of leaving them in the web dashboard.
-  const checkoutMutation = trpc.stripe.createCheckoutSession.useMutation({
-    onSuccess: async (data: any) => {
-      await Linking.openURL(data?.url || RENEW_URL);
-    },
-    // Fall back to web checkout rather than leaving the button dead.
-    onError: () => {
-      Linking.openURL(RENEW_URL);
-    },
-  });
-  const startCheckout = () =>
-    checkoutMutation.mutate({
-      successUrl: `${APP_WEB_URL}/subscribed?source=app`,
-      cancelUrl: `${APP_WEB_URL}/subscribed?source=app&cancelled=1`,
-    });
+  // Subscribing happens in-app through the store (D-13); the paywall owns it.
+  const openPaywall = () => router.push("/paywall");
+  // A failed renewal is fixed in the store's own subscription settings.
+  const fixPayment = () => {
+    openManageSubscriptions().catch(() => {});
+  };
 
-  // Returning from Stripe in the browser: refresh so a new subscription shows
-  // as active without the customer needing to know to pull down.
+  // Returning from the store's subscription settings: refresh so a change
+  // shows without the customer needing to know to pull down.
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") meQuery.refetch();
@@ -105,24 +90,22 @@ export default function DashboardScreen() {
       AsyncStorage.setItem(GRACE_PROMPT_KEY, todayKey);
 
       const daysLeft = Math.max(1, Math.ceil((graceEnd - Date.now()) / 86400000));
-      const buttons: Parameters<typeof Alert.alert>[2] = [{ text: "Later", style: "cancel" }];
-      // Guideline 3.1.1(a): only offer the checkout action on the US storefront.
-      if (showSubscribeCTA) {
-        buttons.push({ text: "Renew Now", onPress: startCheckout });
-      }
       Alert.alert(
         "Payment failed",
         `We couldn't process your payment. Your alerts stay on for ${daysLeft} more ` +
           `day${daysLeft !== 1 ? "s" : ""}, then they'll pause until you renew.\n\n` +
           `Nothing will be deleted — your watch zones stay exactly as they are.`,
-        buttons
+        [
+          { text: "Later", style: "cancel" },
+          { text: "Update Payment", onPress: fixPayment },
+        ]
       );
     });
 
     return () => {
       cancelled = true;
     };
-  }, [user?.graceUntil, showSubscribeCTA]);
+  }, [user?.graceUntil]);
 
   const zonesQuery = trpc.zones.list.useQuery(undefined, { enabled: !!user });
   // Fetch the same 100 the Alert History screen does: the "Alerts" tile used to
@@ -153,7 +136,7 @@ export default function DashboardScreen() {
   // Derived from the shared helper so Settings and the Dashboard cannot drift
   // into describing one state two different ways, which is what happened when
   // each screen mapped the enum for itself.
-  const plan = describeSubscription(user);
+  const plan = describeSubscription(user, storeEntitlement.storePro);
   const isPaused = plan.paused;
 
   const graceEndMs = user.graceUntil ? new Date(user.graceUntil).getTime() : NaN;
@@ -187,8 +170,8 @@ export default function DashboardScreen() {
               {/*
                 A user who has never subscribed must not be told their
                 subscription "ended" — it is false, and it is the first thing a
-                new account sees. `subscribedAt` is null until Stripe reports a
-                completed checkout, which is what separates the two cases.
+                new account sees. `subscribedAt` is null until the server records a
+                first paid subscription, which is what separates the two cases.
               */}
               <Text style={styles.pausedBody}>
                 {plan.neverSubscribed ? (
@@ -210,25 +193,10 @@ export default function DashboardScreen() {
                   </>
                 )}
               </Text>
-              {/*
-                Owner ruling 2026-09-14: Stripe, not in-app purchase, for the US
-                launch. Both stores now let US apps link out to external payment
-                (Apple's commission on those sales is still being litigated;
-                Google's US external-links program reports fees from 2026-10-01).
-                Guideline 3.1.1(a): this CTA is gated to the US App Store
-                storefront — shown only where the US external-link allowance
-                applies, hidden on a confirmed non-US storefront.
-              */}
-              {showSubscribeCTA && (
-                <Text
-                  style={styles.pausedLink}
-                  onPress={startCheckout}
-                >
-                  {checkoutMutation.isPending
-                    ? "Opening checkout…"
-                    : plan.neverSubscribed ? "Subscribe →" : "Renew my subscription →"}
-                </Text>
-              )}
+              {/* D-13: in-app purchase through the store, via the paywall. */}
+              <Text style={styles.pausedLink} onPress={openPaywall}>
+                {plan.neverSubscribed ? "Subscribe →" : "Renew my subscription →"}
+              </Text>
             </View>
           </View>
         )}
@@ -240,14 +208,12 @@ export default function DashboardScreen() {
                 ⚠️ Payment failed — {graceDaysLeft} day{graceDaysLeft !== 1 ? "s" : ""} left
               </Text>
               <Text style={styles.graceBody}>
-                Your alerts are still running. Renew before the {graceDaysLeft} day
-                {graceDaysLeft !== 1 ? "s are" : " is"} up and nothing changes.
+                Your alerts are still running. Update your payment method before the{" "}
+                {graceDaysLeft} day{graceDaysLeft !== 1 ? "s are" : " is"} up and nothing changes.
               </Text>
-              {showSubscribeCTA && (
-                <Text style={styles.pausedLink} onPress={startCheckout}>
-                  Renew my subscription →
-                </Text>
-              )}
+              <Text style={styles.pausedLink} onPress={fixPayment}>
+                Update payment method →
+              </Text>
             </View>
           </View>
         )}

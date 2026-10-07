@@ -10,6 +10,7 @@ import { View, ActivityIndicator, Platform } from "react-native";
 import { trpc, createTRPCClient } from "@/lib/trpc";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { colors } from "@/lib/ios6-theme";
+import { configurePurchases, logInPurchases, logOutPurchases, hasPro } from "@/lib/purchases";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -110,16 +111,52 @@ function PushNotificationSetup() {
   return null;
 }
 
+/**
+ * RevenueCat identity (D-13). app_user_id = TattleTow user id, so the
+ * RevenueCat webhook can credit the right account on the server. Covers sign-in,
+ * a restored session on cold start, and a session that ends (sign-out, deletion,
+ * or an expired cookie). Without an SDK key this does nothing.
+ */
+function PurchasesSetup() {
+  const meQuery = trpc.auth.me.useQuery(undefined, { retry: false });
+  const utils = trpc.useUtils();
+  const userId: number | undefined = meQuery.data?.id;
+  const lastId = useRef<number | null>(null);
+
+  useEffect(() => {
+    // A store-side change (purchase, renewal, expiry) → re-read the server,
+    // which stays the source of truth for entitlement.
+    configurePurchases((info) => {
+      if (hasPro(info)) utils.auth.me.invalidate();
+    });
+  }, []);
+
+  useEffect(() => {
+    if (meQuery.isLoading) return;
+    if (userId != null) {
+      lastId.current = userId;
+      logInPurchases(userId);
+    } else if (lastId.current != null) {
+      lastId.current = null;
+      logOutPurchases();
+    }
+  }, [userId, meQuery.isLoading]);
+
+  return null;
+}
+
 export default function RootLayout() {
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
         <StatusBar style="dark" />
         <PushNotificationSetup />
+        <PurchasesSetup />
         <AuthGuard>
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="auth" />
             <Stack.Screen name="tabs" />
+            <Stack.Screen name="paywall" options={{ presentation: "modal" }} />
           </Stack>
         </AuthGuard>
       </QueryClientProvider>

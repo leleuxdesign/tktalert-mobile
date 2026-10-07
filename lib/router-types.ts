@@ -104,10 +104,6 @@ const appRouter = t.router({
     trigger: t.procedure.mutation((): any => ({})),
     state: t.procedure.query((): any => ({})),
   }),
-  stripe: t.router({
-    createCheckoutSession: t.procedure.input(passthrough).mutation((): any => ({})),
-    createBillingPortalSession: t.procedure.input(passthrough).mutation((): { url: string } => ({ url: "" })),
-  }),
 });
 
 export type AppRouter = typeof appRouter;

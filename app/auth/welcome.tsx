@@ -12,12 +12,11 @@ import { IosPage, IosAppIcon, IosButton, IosCard } from "@/components/ios6";
  * that coverage is Milwaukee-only, nothing to orient them. The store listing
  * did the selling and the app immediately stopped it.
  *
- * DELIBERATELY CARRIES NO PRICE, PLAN, OR PURCHASE CTA. Apple's anti-steering
- * rules bar purchase flows and pricing from inside the native app — that is the
- * reason checkout lives on the web at all. This screen is shared by both
- * platforms, so it is built to the stricter rule. Explaining the product,
- * stating coverage, and routing to sign-up or sign-in is the entire permitted
- * surface, and it is enough. Do not add "$2.99/mo" here.
+ * DELIBERATELY CARRIES NO PRICE, PLAN, OR PURCHASE CTA. Subscribing happens on
+ * the in-app paywall (D-13), which is only reachable once signed in, so every
+ * purchase is tied to an account and its email. Prices come from the store and
+ * are never hardcoded — do not add one here. Explaining the product, stating
+ * coverage, and routing to sign-up or sign-in is this screen's whole job.
  */
 export default function WelcomeScreen() {
   const router = useRouter();

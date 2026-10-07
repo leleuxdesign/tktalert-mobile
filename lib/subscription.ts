@@ -10,7 +10,11 @@
  * different situations — someone whose subscription ended, and someone who
  * never had one. Telling a brand-new user "your subscription ended" is simply
  * false, and it is the first thing they see. `subscribedAt` distinguishes them:
- * it stays null until Stripe reports a completed checkout.
+ * it stays null until the server records a first paid subscription.
+ *
+ * `storePro` (D-13) is the store's own view via RevenueCat. The server is the
+ * source of truth, but its webhook can lag a purchase by seconds; when the store
+ * already reports the "pro" entitlement the account reads as active meanwhile.
  */
 export type SubscriptionView = {
   /** Short word for a badge or status tile. */
@@ -21,14 +25,17 @@ export type SubscriptionView = {
   entitled: boolean;
   /** True when alerts are off and the user can do something about it. */
   paused: boolean;
-  /** True when this account has never completed a checkout. */
+  /** True when this account has never had a paid subscription. */
   neverSubscribed: boolean;
 };
 
-export function describeSubscription(user: {
-  subscriptionStatus?: string | null;
-  subscribedAt?: string | Date | null;
-}): SubscriptionView {
+export function describeSubscription(
+  user: {
+    subscriptionStatus?: string | null;
+    subscribedAt?: string | Date | null;
+  },
+  storePro = false
+): SubscriptionView {
   const status = (user.subscriptionStatus ?? "").toLowerCase();
   const neverSubscribed = !user.subscribedAt;
 
@@ -42,7 +49,7 @@ export function describeSubscription(user: {
     };
   }
 
-  if (status === "active") {
+  if (status === "active" || storePro) {
     return {
       badge: "Active",
       planLabel: "Active Subscription",

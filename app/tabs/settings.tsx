@@ -4,11 +4,19 @@ import { View, Text, ScrollView, Pressable, Switch, Alert, ActivityIndicator, St
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Linking from "expo-linking";
-import { CreditCard, ExternalLink, MapPin, MessageSquare, ChevronRight, Shield, Mail } from "lucide-react-native";
+import { CreditCard, ExternalLink, MapPin, MessageSquare, ChevronRight, Shield, Mail, RotateCcw } from "lucide-react-native";
 import Constants from "expo-constants";
 import { trpc } from "@/lib/trpc";
 import { colors, gradients, fontFamily, cardShadow } from "@/lib/ios6-theme";
 import { formatPhoneDisplay } from "@/lib/format";
+import {
+  IAP_AVAILABLE,
+  STORE_NAME,
+  logOutPurchases,
+  openManageSubscriptions,
+  restore,
+  useStoreEntitlement,
+} from "@/lib/purchases";
 import {
   IosPage,
   IosKeyboardScroll,
@@ -111,6 +119,8 @@ export default function SettingsScreen() {
   };
 
   const logoutMutation = trpc.auth.logout.useMutation();
+  const storeEntitlement = useStoreEntitlement();
+  const [restoring, setRestoring] = useState(false);
 
   const handleLogout = () => {
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
@@ -120,6 +130,7 @@ export default function SettingsScreen() {
         style: "destructive",
         onPress: async () => {
           await AsyncStorage.removeItem("auth_user");
+          await logOutPurchases();
           logoutMutation.mutate(undefined, {
             onSettled: () => {
               utils.auth.me.invalidate();
@@ -132,51 +143,46 @@ export default function SettingsScreen() {
   };
 
   /**
-   * BL-7: self-serve subscription management. The server creates a Stripe
-   * billing-portal session (hosted by Stripe — cancel/card-update happen
-   * there), and we hand the URL to the external browser. No purchase UI
-   * lives in the app; this only links out, matching the v1.0 login-only
-   * billing pattern.
+   * D-13: subscriptions are bought and managed through the store. Cancelling or
+   * changing payment happens in the store's own subscription settings.
    */
-  const billingPortalMutation = trpc.stripe.createBillingPortalSession.useMutation({
-    onSuccess: async (data) => {
-      const url = data?.url;
-      if (!url) {
-        Alert.alert(
-          "Something went wrong",
-          "We couldn't open your subscription settings. Please try again, or manage your subscription at tattletow.com."
-        );
-        return;
+  const handleManageSubscription = () => {
+    openManageSubscriptions().catch(() =>
+      Alert.alert("Couldn't open subscriptions", `Open ${STORE_NAME} and go to Subscriptions.`)
+    );
+  };
+
+  const handleRestore = async () => {
+    setRestoring(true);
+    try {
+      const ok = await restore();
+      if (ok) {
+        await utils.auth.me.invalidate();
+        Alert.alert("Purchases restored", "Your subscription is active on this account.");
+      } else {
+        Alert.alert("Nothing to restore", `No active TattleTow subscription was found on your ${STORE_NAME} account.`);
       }
-      try {
-        await Linking.openURL(url);
-      } catch {
-        Alert.alert(
-          "Couldn't open browser",
-          "Please visit tattletow.com to manage your subscription."
-        );
-      }
-    },
-    onError: () => {
-      Alert.alert(
-        "Something went wrong",
-        "We couldn't open your subscription settings. Please try again, or manage your subscription at tattletow.com."
-      );
-    },
-  });
+    } catch (e: any) {
+      Alert.alert("Restore failed", e?.message || "Something went wrong. Please try again.");
+    } finally {
+      setRestoring(false);
+    }
+  };
 
   const deleteAccountMutation = trpc.auth.deleteAccount.useMutation();
 
   /**
    * Two-step destructive confirm. Google Play and the App Store both require
    * in-app account deletion; the second prompt spells out what is lost, because
-   * this is irreversible and cancels any active subscription.
+   * this is irreversible. A store subscription is billed by Apple / Google, so
+   * deleting the account cannot cancel it — the prompt says so (Apple 5.1.1(v)).
    */
   const handleDeleteAccount = () => {
     Alert.alert(
       "Delete Account",
-      "This permanently deletes your account, watch zones, and alert history. " +
-        "Any active subscription is cancelled. This cannot be undone.",
+      "This permanently deletes your account, watch zones, and alert history. This cannot be undone.\n\n" +
+        `Deleting your account does not cancel a subscription bought through ${STORE_NAME}. ` +
+        "Cancel it first in Settings → Manage Subscription.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -194,6 +200,7 @@ export default function SettingsScreen() {
                     {
                       onSuccess: async () => {
                         await AsyncStorage.removeItem("auth_user");
+                        await logOutPurchases();
                         await utils.auth.me.invalidate();
                         router.replace("/auth/login");
                       },
@@ -219,14 +226,16 @@ export default function SettingsScreen() {
   }
 
   const zoneCount = zonesQuery.data?.length ?? 0;
-  const plan = describeSubscription(user);
+  const plan = describeSubscription(user, storeEntitlement.storePro);
   const supportThread = trpc.support.myThread.useQuery(undefined, { refetchInterval: 60_000 });
   const supportUnread = (supportThread.data as any)?.unread ?? 0;
 
-  // Stripe-billed users only (active or lapsed). Comped accounts have no
-  // Stripe customer, so a billing-portal session cannot be created for them.
-  const hasStripeSubscription =
-    user.subscriptionStatus === "active" || user.subscriptionStatus === "lapsed";
+  // Store subscribers manage billing in the store. A paid account the store
+  // does not know about (bought before in-app billing) is handled by support.
+  const isComped = user.subscriptionStatus === "comped";
+  const isStoreSubscriber = storeEntitlement.storePro;
+  const isOffStoreSubscriber =
+    !isComped && !isStoreSubscriber && storeEntitlement.loaded && plan.entitled;
 
   return (
     <IosPage>
@@ -531,41 +540,40 @@ export default function SettingsScreen() {
                 </IosBadge>
               </View>
             </View>
-            {hasStripeSubscription && (
-              <Pressable
-                onPress={() =>
-                  billingPortalMutation.mutate({
-                    // Stripe returns here, which points the customer back to the app.
-                    returnUrl: "https://app.tattletow.com/subscribed?source=app&portal=1",
-                  })
-                }
-                disabled={billingPortalMutation.isPending}
-              >
-                {({ pressed }) => (
-                  <View style={[styles.wideCard, pressed && { opacity: 0.85 }]}>
-                    <View style={styles.wideCardIcon}>
-                      <IosIconCell gradient={gradients.iconBlue}>
-                        <ExternalLink size={18} color="#fff" />
-                      </IosIconCell>
-                    </View>
-                    <View style={styles.wideCardBody}>
-                      <Text style={styles.wideCardTitle}>Manage Subscription</Text>
-                      <Text style={styles.wideCardSubtitle}>
-                        {billingPortalMutation.isPending
-                          ? "Opening…"
-                          : "Cancel or update billing in your browser"}
-                      </Text>
-                    </View>
-                    <View style={styles.wideCardTrailing}>
-                      {billingPortalMutation.isPending ? (
-                        <ActivityIndicator color={colors.blue} />
-                      ) : (
-                        <ChevronRight size={20} color={colors.silver} />
-                      )}
-                    </View>
-                  </View>
-                )}
-              </Pressable>
+            {/* D-13: in-app subscriptions through the store. */}
+            {!plan.entitled && (
+              <ActionRow
+                icon={<CreditCard size={18} color="#fff" />}
+                gradient={gradients.iconGreen}
+                title="Subscribe"
+                subtitle="See the plan and start your subscription"
+                onPress={() => router.push("/paywall")}
+              />
+            )}
+            {isStoreSubscriber && (
+              <ActionRow
+                icon={<ExternalLink size={18} color="#fff" />}
+                gradient={gradients.iconBlue}
+                title="Manage Subscription"
+                subtitle={`Cancel or change billing in ${STORE_NAME}`}
+                onPress={handleManageSubscription}
+              />
+            )}
+            {isOffStoreSubscriber && (
+              <Text style={styles.smsDisclosure}>
+                Your subscription was set up before in-app billing. To change or cancel it, message us from
+                Support above.
+              </Text>
+            )}
+            {IAP_AVAILABLE && !isComped && (
+              <ActionRow
+                icon={<RotateCcw size={18} color="#fff" />}
+                gradient={gradients.iconGray}
+                title="Restore Purchases"
+                subtitle={`Already subscribed through ${STORE_NAME}? Restore it here`}
+                onPress={handleRestore}
+                busy={restoring}
+              />
             )}
           </View>
         </View>
@@ -623,6 +631,42 @@ export default function SettingsScreen() {
         </View>
       </IosKeyboardScroll>
     </IosPage>
+  );
+}
+
+/** One tappable row in the Subscription section. */
+function ActionRow({
+  icon,
+  gradient,
+  title,
+  subtitle,
+  onPress,
+  busy = false,
+}: {
+  icon: React.ReactNode;
+  gradient: readonly string[];
+  title: string;
+  subtitle: string;
+  onPress: () => void;
+  busy?: boolean;
+}) {
+  return (
+    <Pressable onPress={onPress} disabled={busy}>
+      {({ pressed }) => (
+        <View style={[styles.wideCard, pressed && { opacity: 0.85 }]}>
+          <View style={styles.wideCardIcon}>
+            <IosIconCell gradient={gradient}>{icon}</IosIconCell>
+          </View>
+          <View style={styles.wideCardBody}>
+            <Text style={styles.wideCardTitle}>{title}</Text>
+            <Text style={styles.wideCardSubtitle}>{subtitle}</Text>
+          </View>
+          <View style={styles.wideCardTrailing}>
+            {busy ? <ActivityIndicator color={colors.blue} /> : <ChevronRight size={20} color={colors.silver} />}
+          </View>
+        </View>
+      )}
+    </Pressable>
   );
 }
 
