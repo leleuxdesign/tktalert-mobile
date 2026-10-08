@@ -15,6 +15,7 @@ import { MapPin, ChevronRight, Check } from "lucide-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { trpc } from "@/lib/trpc";
 import { IAP_AVAILABLE, loadOffer } from "@/lib/purchases";
+import { SERVICE_DISCLAIMER as DISCLAIMER } from "@/lib/disclaimer";
 import { colors, gradients, fontFamily } from "@/lib/ios6-theme";
 import {
   IosPage,
@@ -37,8 +38,6 @@ import SmsConsentBlock from "@/components/SmsConsentBlock";
 const TERMS_URL = "https://app.tattletow.com/terms";
 const PRIVACY_URL = "https://app.tattletow.com/privacy";
 
-const DISCLAIMER =
-  "TattleTow monitors parking complaints filed with the City of Milwaukee — not parking enforcement activity. A notification means a complaint has been filed near your registered zone. It does not mean a parking ticket has been issued, is being issued, or will be issued. TattleTow makes no guarantee that a complaint will result in enforcement action, nor that all complaints filed in your zone will be captured. Use of this service does not constitute legal advice. TattleTow is not affiliated with the City of Milwaukee or any municipal authority.";
 
 type Step = 1 | 2 | 3 | 4 | 5 | "success";
 const STEP_TITLES: Record<number, string> = {

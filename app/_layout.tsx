@@ -157,6 +157,7 @@ export default function RootLayout() {
             <Stack.Screen name="auth" />
             <Stack.Screen name="tabs" />
             <Stack.Screen name="paywall" options={{ presentation: "modal" }} />
+            <Stack.Screen name="consent" options={{ gestureEnabled: false }} />
           </Stack>
         </AuthGuard>
       </QueryClientProvider>
