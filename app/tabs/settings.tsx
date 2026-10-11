@@ -171,7 +171,7 @@ export default function SettingsScreen() {
       } else if (outcome === "other-account") {
         Alert.alert(
           "TattleTow",
-          "This subscription is linked to a different TattleTow account. Sign in with that email, or message us from Support above."
+          "This subscription is linked to a different TattleTow account. Sign in with that email, or write to support@tattletow.com."
         );
       } else {
         Alert.alert(

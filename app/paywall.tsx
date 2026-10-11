@@ -22,9 +22,12 @@ import { IAP_AVAILABLE, loadOffer, pollServerEntitlement, purchase, restore, typ
  * price and trial length substituted for the US "$3.99" / "14-day" examples.
  */
 
-// Terms: Apple's standard EULA until our own Terms page is rewritten for IAP
-// (tattletow.com/terms still describes Stripe billing) — Fran decision 4, E.L.
-const TERMS_URL = "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/";
+// Terms of Use (Owner ruling 2026-10-11): Apple's standard EULA governs App
+// Store purchases; it doesn't govern Google Play, so Android links our Terms.
+const TERMS_URL =
+  Platform.OS === "ios"
+    ? "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/"
+    : "https://tattletow.com/terms";
 const PRIVACY_URL = "https://tattletow.com/privacy";
 
 const IOS = Platform.OS === "ios";
@@ -63,9 +66,9 @@ const COPY = {
   notYetCredited:
     "Your purchase went through but hasn't reached your account yet. Pull down on the dashboard in a minute, or message us from Support in Settings.",
   storeError: "Something went wrong. Check your connection and try again.",
-  // Fran §4, without the email address while support@ vs help@ is open (Fran decision 2).
+  // Fran §4; support address per Owner ruling 2026-10-11.
   otherAccount:
-    "This subscription is linked to a different TattleTow account. Sign in with that email, or message us from Support in Settings.",
+    "This subscription is linked to a different TattleTow account. Sign in with that email, or write to support@tattletow.com.",
 };
 
 export default function PaywallScreen() {
